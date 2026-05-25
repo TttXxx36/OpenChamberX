@@ -3254,6 +3254,55 @@ fn desktop_read_file(path: String) -> Result<FileContent, String> {
     })
 }
 
+/// Read an image from the system clipboard and return it as a base64-encoded PNG.
+///
+/// Workaround for WebKitGTK clipboard image bug on Linux (webkit bug #218519):
+/// the `paste` event's `DataTransfer` does not expose raw image bytes from the
+/// X11/Wayland clipboard, so the renderer falls back to this command when its
+/// `clipboardData.files`/`items` are empty in the desktop shell.
+///
+/// Returns `Ok(None)` when the clipboard has no image (lets the renderer treat
+/// the paste as a no-op without surfacing an error toast).
+#[tauri::command]
+fn desktop_read_clipboard_image() -> Result<Option<FileContent>, String> {
+    use arboard::Clipboard;
+    use png::{BitDepth, ColorType, Encoder};
+
+    let mut clipboard =
+        Clipboard::new().map_err(|e| format!("Failed to open clipboard: {e}"))?;
+
+    let image = match clipboard.get_image() {
+        Ok(img) => img,
+        Err(arboard::Error::ContentNotAvailable) => return Ok(None),
+        Err(e) => return Err(format!("Failed to read clipboard image: {e}")),
+    };
+
+    let width = u32::try_from(image.width).map_err(|e| format!("Invalid image width: {e}"))?;
+    let height = u32::try_from(image.height).map_err(|e| format!("Invalid image height: {e}"))?;
+
+    let mut png_bytes: Vec<u8> = Vec::new();
+    {
+        let mut encoder = Encoder::new(&mut png_bytes, width, height);
+        encoder.set_color(ColorType::Rgba);
+        encoder.set_depth(BitDepth::Eight);
+        let mut writer = encoder
+            .write_header()
+            .map_err(|e| format!("Failed to write PNG header: {e}"))?;
+        writer
+            .write_image_data(&image.bytes)
+            .map_err(|e| format!("Failed to encode clipboard image as PNG: {e}"))?;
+    }
+
+    let size = png_bytes.len();
+    let base64 = general_purpose::STANDARD.encode(&png_bytes);
+
+    Ok(Some(FileContent {
+        mime: "image/png".to_string(),
+        base64,
+        size,
+    }))
+}
+
 #[tauri::command]
 async fn desktop_save_markdown_file(
     app: tauri::AppHandle,
@@ -3954,12 +4003,30 @@ fn main() {
     // never composited (blank window) or crashes the WebProcess when complex
     // panes (e.g. the diff/Files Changed view) render. Disabling both renderer
     // paths is the canonical workaround until upstream WebKitGTK ships a fix.
+    //
+    // WebKitGTK 2.46+ also enables a bubblewrap sandbox for WebKitWebProcess /
+    // WebKitNetworkProcess by default, and GTK on GNOME routes
+    // GtkFileChooserNative through org.freedesktop.portal.FileChooser. For an
+    // unconfined Tauri app (no Flatpak/Snap manifest) on Ubuntu 24.04 GNOME,
+    // this combination breaks two user-visible flows:
+    //   * <input type="file"> opens a portal-backed chooser that returns an
+    //     empty file list because the portal can't grant the unconfined app
+    //     access to enumerate $HOME.
+    //   * Clipboard image paste (DataTransfer.files for image/*) silently
+    //     returns empty because the sandboxed WebProcess can't negotiate
+    //     non-text X11 selection mime types through the portal.
+    // WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 disables the WebKit sandbox
+    // (WEBKIT_FORCE_SANDBOX=0 is rejected by WebKitGTK >= 2.50); GTK_USE_PORTAL=0
+    // forces GTK to draw the chooser directly against the local FS. Both are
+    // safe for an unconfined desktop binary and restore pre-2.46 behavior.
     // No effect on macOS/Windows builds.
     #[cfg(target_os = "linux")]
     {
         for (key, value) in [
             ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
             ("WEBKIT_DISABLE_COMPOSITING_MODE", "1"),
+            ("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1"),
+            ("GTK_USE_PORTAL", "0"),
         ] {
             if env::var_os(key).is_none() {
                 env::set_var(key, value);
@@ -4244,6 +4311,7 @@ fn main() {
             remote_ssh::desktop_ssh_logs,
             remote_ssh::desktop_ssh_logs_clear,
             desktop_read_file,
+            desktop_read_clipboard_image,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

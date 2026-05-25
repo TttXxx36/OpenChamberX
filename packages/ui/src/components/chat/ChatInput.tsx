@@ -36,7 +36,8 @@ import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 // useMessageStore removed — messages now come from sync system
-import { isTauriShell, isVSCodeRuntime } from '@/lib/desktop';
+import { isTauriShell, isVSCodeRuntime, isDesktopShell } from '@/lib/desktop';
+import { readDesktopClipboardImage } from '@/lib/desktopNative';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { StopIcon } from '@/components/icons/StopIcon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -2831,6 +2832,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 }
             }
         });
+
+        if (fileMap.size === 0 && isDesktopShell()) {
+            try {
+                const nativeFile = await readDesktopClipboardImage();
+                if (nativeFile) {
+                    fileMap.set(`${nativeFile.name}-${nativeFile.size}`, nativeFile);
+                }
+            } catch (error) {
+                console.error('Native clipboard image read failed', error);
+            }
+        }
 
         const imageFiles = Array.from(fileMap.values());
         if (imageFiles.length === 0) {

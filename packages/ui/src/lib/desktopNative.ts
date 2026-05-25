@@ -139,6 +139,37 @@ export const readDesktopFileAsDataUrl = async (path: string): Promise<string> =>
   return `data:${result.mime || 'application/octet-stream'};base64,${result.base64}`;
 };
 
+const base64ToUint8Array = (base64: string): Uint8Array => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+};
+
+export const readDesktopClipboardImage = async (): Promise<File | null> => {
+  if (!isDesktopShell()) {
+    return null;
+  }
+
+  try {
+    const result = await invokeDesktopCommand<{ mime: string; base64: string; size?: number } | null>(
+      'desktop_read_clipboard_image',
+    );
+    if (!result || !result.base64) {
+      return null;
+    }
+    const bytes = base64ToUint8Array(result.base64);
+    const mime = result.mime || 'image/png';
+    const extension = mime.split('/')[1] || 'png';
+    const filename = `pasted-${Date.now()}.${extension}`;
+    return new File([bytes], filename, { type: mime });
+  } catch {
+    return null;
+  }
+};
+
 export const listenDesktopNativeDragDrop = async (
   handler: (event: unknown) => void,
 ): Promise<(() => void) | null> => {
