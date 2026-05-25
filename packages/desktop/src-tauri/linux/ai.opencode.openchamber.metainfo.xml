@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>ai.opencode.openchamber</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>OpenChamber</name>
+  <summary>A rich interface for OpenCode</summary>
+
+  <description>
+    <p>
+      OpenChamber is a rich graphical interface for the OpenCode coding agent.
+      Review diffs, manage agents, run dev servers, and keep the big picture
+      while your AI codes — on desktop, browser, or phone.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Branchable chat timeline with undo, redo, and one-click forks from any turn</li>
+      <li>Multi-agent runs from one prompt with isolated worktrees</li>
+      <li>Smart tool UIs for diffs, file operations, permissions, and task progress</li>
+      <li>Full Git workflows in-app: identities, commits, PR creation, checks, merges</li>
+      <li>GitHub-native sessions started from issues and pull requests</li>
+      <li>Plan/Build mode with a dedicated plan view for drafting implementation steps</li>
+      <li>Integrated terminal with per-directory sessions</li>
+      <li>Voice mode with speech input and read-aloud responses</li>
+      <li>Open In shortcuts for Finder/Files, Terminal, and your preferred editor</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">OpenChamber.desktop</launchable>
+
+  <url type="homepage">https://github.com/btriapitsyn/openchamber</url>
+  <url type="bugtracker">https://github.com/btriapitsyn/openchamber/issues</url>
+  <url type="vcs-browser">https://github.com/btriapitsyn/openchamber</url>
+
+  <developer id="ai.opencode">
+    <name>OpenChamber Contributors</name>
+  </developer>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Chat interface with branchable timeline</caption>
+      <image>https://raw.githubusercontent.com/btriapitsyn/openchamber/main/docs/references/chat_example.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Tool output rendered inline</caption>
+      <image>https://raw.githubusercontent.com/btriapitsyn/openchamber/main/docs/references/tool_output_example.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Diff viewer</caption>
+      <image>https://raw.githubusercontent.com/btriapitsyn/openchamber/main/docs/references/diff_example.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings</caption>
+      <image>https://raw.githubusercontent.com/btriapitsyn/openchamber/main/docs/references/settings_example.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>PWA chat on mobile</caption>
+      <image>https://raw.githubusercontent.com/btriapitsyn/openchamber/main/docs/references/pwa_chat_example.png</image>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>Development</category>
+    <category>IDE</category>
+  </categories>
+
+  <keywords>
+    <keyword>opencode</keyword>
+    <keyword>ai</keyword>
+    <keyword>coding</keyword>
+    <keyword>agent</keyword>
+    <keyword>llm</keyword>
+    <keyword>diff</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+
+  <provides>
+    <binary>openchamber-desktop</binary>
+  </provides>
+
+  <releases>
+    <release version="1.11.5" date="2026-05-25" />
+  </releases>
+</component>

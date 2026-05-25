@@ -1,0 +1,12 @@
+[Desktop Entry]
+Categories=Development;IDE;
+Comment=A rich interface for OpenCode — review diffs, manage agents, run dev servers
+Exec={{exec}}
+GenericName=OpenCode Interface
+Icon={{icon}}
+Keywords=opencode;ai;coding;agent;llm;diff;
+Name={{name}}
+StartupNotify=true
+StartupWMClass={{exec}}
+Terminal=false
+Type=Application

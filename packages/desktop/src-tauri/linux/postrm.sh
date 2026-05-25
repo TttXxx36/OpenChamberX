@@ -1,0 +1,14 @@
+#!/bin/sh
+# Drop the caches updated by postinst so removal leaves a clean state.
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
+    fi
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database -q /usr/share/applications 2>/dev/null || true
+    fi
+fi
+
+exit 0

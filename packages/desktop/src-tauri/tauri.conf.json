@@ -82,7 +82,14 @@
           "libgtk-3-0",
           "libayatana-appindicator3-1",
           "librsvg2-2"
-        ]
+        ],
+        "section": "devel",
+        "desktopTemplate": "linux/openchamber.desktop",
+        "postInstallScript": "linux/postinst.sh",
+        "postRemoveScript": "linux/postrm.sh",
+        "files": {
+          "/usr/share/metainfo/ai.opencode.openchamber.metainfo.xml": "linux/ai.opencode.openchamber.metainfo.xml"
+        }
       },
       "appimage": {
         "bundleMediaFramework": true

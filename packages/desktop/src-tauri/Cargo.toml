@@ -3,6 +3,11 @@ name = "openchamber-desktop"
 version = "1.11.5"
 edition = "2021"
 publish = false
+description = "A rich interface for OpenCode — review diffs, manage agents, run dev servers"
+authors = ["OpenChamber Contributors"]
+homepage = "https://github.com/btriapitsyn/openchamber"
+repository = "https://github.com/btriapitsyn/openchamber"
+license = "MIT"
 
 [[bin]]
 name = "openchamber-desktop"

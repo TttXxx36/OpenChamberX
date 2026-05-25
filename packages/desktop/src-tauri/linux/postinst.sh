@@ -1,0 +1,22 @@
+#!/bin/sh
+# Refresh icon, desktop, mime and AppStream caches so the launcher and
+# software centers pick up OpenChamber immediately after install.
+set -e
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications 2>/dev/null || true
+fi
+
+if command -v update-mime-database >/dev/null 2>&1; then
+    update-mime-database /usr/share/mime 2>/dev/null || true
+fi
+
+if command -v appstreamcli >/dev/null 2>&1; then
+    appstreamcli refresh-cache --force 2>/dev/null || true
+fi
+
+exit 0
