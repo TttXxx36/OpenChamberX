@@ -38,6 +38,7 @@
   },
   "bundle": {
     "active": true,
+    "targets": ["app", "dmg", "deb", "appimage"],
     "externalBin": [
       "sidecars/openchamber-server"
     ],
@@ -67,6 +68,19 @@
           "width": 660,
           "height": 400
         }
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0",
+          "libayatana-appindicator3-1",
+          "librsvg2-2"
+        ]
+      },
+      "appimage": {
+        "bundleMediaFramework": true
       }
     },
     "createUpdaterArtifacts": true
