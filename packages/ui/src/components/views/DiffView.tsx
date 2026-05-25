@@ -1,8 +1,12 @@
 import React from 'react';
+import type { ToolPart } from '@opencode-ai/sdk/v2';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useGitStore, useGitStatus, useIsGitRepo, useGitFileCount, useGitLoadingStatus } from '@/stores/useGitStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useDirectorySync } from '@/sync/sync-context';
+import { FILE_EDIT_TOOLS, extractChangedFiles, toRelativePath } from '@/components/chat/changedFiles';
 import { cn } from '@/lib/utils';
 import type { GitStatus } from '@/lib/api/types';
 import {
@@ -98,6 +102,19 @@ const DIFF_VIEW_MODE_OPTIONS: Array<{
         descriptionKey: 'diffView.mode.stacked.description',
     },
 ];
+
+type DiffFileScope = 'working' | 'lastMessage';
+
+const DIFF_FILE_SCOPE_OPTIONS: Array<{
+    value: DiffFileScope;
+    labelKey: I18nKey;
+    icon: 'git-branch' | 'chat-3';
+}> = [
+    { value: 'working', labelKey: 'diffView.scope.working.label', icon: 'git-branch' },
+    { value: 'lastMessage', labelKey: 'diffView.scope.lastMessage.label', icon: 'chat-3' },
+];
+
+const EMPTY_PARTS_RECORD: Record<string, unknown> = {};
 
 const getChangeSymbol = (file: GitStatus['files'][number]): string => {
     const indexCode = file.index?.trim();
@@ -321,6 +338,54 @@ const DiffViewModeSelector = React.memo<DiffViewModeSelectorProps>(({ mode, onMo
                             <span className="typography-meta text-foreground">
                                 {t(option.labelKey)}
                             </span>
+                        </DropdownMenuRadioItem>
+                    ))}
+                </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+});
+
+interface DiffFileScopeSelectorProps {
+    scope: DiffFileScope;
+    onScopeChange: (scope: DiffFileScope) => void;
+}
+
+const DiffFileScopeSelector = React.memo<DiffFileScopeSelectorProps>(({ scope, onScopeChange }) => {
+    const { t } = useI18n();
+    const currentOption =
+        DIFF_FILE_SCOPE_OPTIONS.find((option) => option.value === scope) ?? DIFF_FILE_SCOPE_OPTIONS[0];
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    className="flex h-7 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t('diffView.scope.ariaLabel')}
+                >
+                    <Icon name={currentOption.icon} className="size-3.5" />
+                    <span className="min-w-0 truncate typography-meta">
+                        {t(currentOption.labelKey)}
+                    </span>
+                    <Icon name="arrow-down-s" className="size-4 opacity-50" />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="min-w-[180px]">
+                <DropdownMenuLabel className="typography-meta text-muted-foreground">
+                    {t('diffView.scope.label')}
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                    value={scope}
+                    onValueChange={(value) => onScopeChange(value as DiffFileScope)}
+                >
+                    {DIFF_FILE_SCOPE_OPTIONS.map((option) => (
+                        <DropdownMenuRadioItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                                <Icon name={option.icon} className="size-3.5 text-muted-foreground" />
+                                <span className="typography-meta text-foreground">
+                                    {t(option.labelKey)}
+                                </span>
+                            </div>
                         </DropdownMenuRadioItem>
                     ))}
                 </DropdownMenuRadioGroup>
@@ -1008,6 +1073,78 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const [diffLoadError, setDiffLoadError] = React.useState<string | null>(null);
     const lastDiffRequestRef = React.useRef<string | null>(null);
 
+    const [fileScope, setFileScope] = React.useState<DiffFileScope>('working');
+    const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
+
+    // Reset to "working" on session change — last-message context is session-scoped.
+    React.useEffect(() => {
+        setFileScope('working');
+    }, [currentSessionId]);
+
+    const lastAssistantMessageId = useDirectorySync(
+        React.useCallback((state) => {
+            if (!currentSessionId) return null;
+            const messages = state.message[currentSessionId];
+            if (!messages || messages.length === 0) return null;
+            for (let i = messages.length - 1; i >= 0; i -= 1) {
+                if (messages[i].role === 'assistant') return messages[i].id;
+            }
+            return null;
+        }, [currentSessionId]),
+        effectiveDirectory,
+    );
+
+    const lastAssistantParts = useDirectorySync(
+        React.useCallback((state) => {
+            if (!lastAssistantMessageId) return EMPTY_PARTS_RECORD;
+            return state.part[lastAssistantMessageId] ?? EMPTY_PARTS_RECORD;
+        }, [lastAssistantMessageId]),
+        effectiveDirectory,
+    );
+
+    // Returns null when no last assistant message exists; empty Set when one exists
+    // but produced no file edits. Set holds BOTH relative and absolute forms so we
+    // can match against git status (relative) regardless of tool output shape.
+    const lastMessageFilePathsRef = React.useRef<Set<string> | null>(null);
+    const lastMessageFilePaths = React.useMemo<Set<string> | null>(() => {
+        if (!lastAssistantMessageId) {
+            lastMessageFilePathsRef.current = null;
+            return null;
+        }
+        if (!effectiveDirectory) {
+            return lastMessageFilePathsRef.current;
+        }
+        const toolParts: ToolPart[] = [];
+        for (const part of Object.values(lastAssistantParts)) {
+            if (!part || typeof part !== 'object') continue;
+            const typed = part as ToolPart;
+            if (typed.type !== 'tool') continue;
+            if (!FILE_EDIT_TOOLS.has(typed.tool)) continue;
+            toolParts.push(typed);
+        }
+        const extracted = extractChangedFiles(toolParts);
+        const baseDir = effectiveDirectory.endsWith('/') ? effectiveDirectory : effectiveDirectory + '/';
+        const next = new Set<string>();
+        for (const file of extracted) {
+            const rel = toRelativePath(file.path, effectiveDirectory);
+            next.add(rel);
+            next.add(file.path.startsWith('/') ? file.path : baseDir + file.path);
+        }
+        // Stable identity guard: streaming deltas re-create `lastAssistantParts`
+        // every event; reuse prior Set reference when contents are unchanged so
+        // the downstream `changedFiles` memo doesn't re-run on every keystroke.
+        const prev = lastMessageFilePathsRef.current;
+        if (prev && prev.size === next.size) {
+            let identical = true;
+            for (const path of next) {
+                if (!prev.has(path)) { identical = false; break; }
+            }
+            if (identical) return prev;
+        }
+        lastMessageFilePathsRef.current = next;
+        return next;
+    }, [lastAssistantMessageId, lastAssistantParts, effectiveDirectory]);
+
     const pendingDiffFile = useUIStore((state) => state.pendingDiffFile);
     const pendingDiffStaged = useUIStore((state) => state.pendingDiffStaged);
     const setPendingDiffFile = useUIStore((state) => state.setPendingDiffFile);
@@ -1136,7 +1273,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 ? isWorkingStatusFile
                 : () => true;
 
-        return status.files
+        const entries = status.files
             .filter(includeFile)
             .map((file) => ({
                 ...file,
@@ -1145,7 +1282,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 isNew: isNewStatusFile(file),
             }))
             .sort((a, b) => a.path.localeCompare(b.path));
-    }, [diffScope, status]);
+
+        if (fileScope === 'lastMessage' && lastMessageFilePaths) {
+            return entries.filter((entry) => lastMessageFilePaths.has(entry.path));
+        }
+        return entries;
+    }, [diffScope, status, fileScope, lastMessageFilePaths]);
 
     const selectedFileEntry = React.useMemo(() => {
         if (!selectedFile) return null;
@@ -1754,6 +1896,18 @@ export const DiffView: React.FC<DiffViewProps> = ({
         }
 
         if (changedFiles.length === 0) {
+            if (fileScope === 'lastMessage') {
+                const emptyKey: I18nKey = lastMessageFilePaths === null
+                    ? 'diffView.scope.empty.noMessage'
+                    : lastMessageFilePaths.size === 0
+                        ? 'diffView.scope.empty.noEdits'
+                        : 'diffView.scope.empty.noIntersection';
+                return (
+                    <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+                        {t(emptyKey)}
+                    </div>
+                );
+            }
             return (
                 <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                     {t('diffView.state.cleanWorkingTree')}
@@ -1819,6 +1973,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 {!isMobileLayout && (
                     <DiffViewModeSelector mode={diffViewMode} onModeChange={handleDiffViewModeChange} />
                 )}
+                <DiffFileScopeSelector scope={fileScope} onScopeChange={setFileScope} />
                 {showFileSelector && (
                     <FileSelector
                         changedFiles={changedFiles}
