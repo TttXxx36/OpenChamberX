@@ -170,6 +170,51 @@ export const readDesktopClipboardImage = async (): Promise<File | null> => {
   }
 };
 
+const guessMimeFromExtension = (filename: string): string => {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  const map: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    svg: 'image/svg+xml',
+    bmp: 'image/bmp',
+    pdf: 'application/pdf',
+    json: 'application/json',
+    md: 'text/markdown',
+    txt: 'text/plain',
+  };
+  return map[ext] ?? 'application/octet-stream';
+};
+
+export const pickDesktopFiles = async (): Promise<File[]> => {
+  if (!isDesktopShell()) {
+    return [];
+  }
+
+  const paths = await invokeDesktopCommand<string[] | null>('desktop_pick_files');
+  if (!paths || paths.length === 0) {
+    return [];
+  }
+
+  const files: File[] = [];
+  for (const path of paths) {
+    try {
+      const content = await readDesktopFile(path);
+      const bytes = base64ToUint8Array(content.base64);
+      const filename = path.split('/').pop() || 'file';
+      const mime = content.mime && content.mime !== 'application/octet-stream'
+        ? content.mime
+        : guessMimeFromExtension(filename);
+      files.push(new File([bytes], filename, { type: mime }));
+    } catch (error) {
+      console.error('Failed to read picked file', path, error);
+    }
+  }
+  return files;
+};
+
 export const listenDesktopNativeDragDrop = async (
   handler: (event: unknown) => void,
 ): Promise<(() => void) | null> => {

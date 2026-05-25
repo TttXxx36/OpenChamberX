@@ -37,7 +37,7 @@ import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 // useMessageStore removed — messages now come from sync system
 import { isTauriShell, isVSCodeRuntime, isDesktopShell } from '@/lib/desktop';
-import { readDesktopClipboardImage } from '@/lib/desktopNative';
+import { readDesktopClipboardImage, pickDesktopFiles } from '@/lib/desktopNative';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { StopIcon } from '@/components/icons/StopIcon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -3526,13 +3526,29 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
     }, [attachFiles, t]);
 
+    const handleDesktopPickFiles = React.useCallback(async () => {
+        try {
+            const files = await pickDesktopFiles();
+            if (files.length > 0) {
+                await attachFiles(files);
+            }
+        } catch (error) {
+            console.error('Desktop file picker failed', error);
+            toast.error(error instanceof Error ? error.message : t('chat.chatInput.toast.attachFileFailed'));
+        }
+    }, [attachFiles, t]);
+
     const handlePickLocalFiles = React.useCallback(() => {
         if (isVSCodeRuntime()) {
             void handleVSCodePickFiles();
             return;
         }
+        if (isDesktopShell()) {
+            void handleDesktopPickFiles();
+            return;
+        }
         fileInputRef.current?.click();
-    }, [handleVSCodePickFiles]);
+    }, [handleDesktopPickFiles, handleVSCodePickFiles]);
 
     const handleLocalFileSelect = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;

@@ -3303,6 +3303,40 @@ fn desktop_read_clipboard_image() -> Result<Option<FileContent>, String> {
     }))
 }
 
+/// Open a native file picker and return the selected absolute paths.
+///
+/// Workaround for a WebKitGTK 2.52 regression where `<input type="file"
+/// accept="*/*">` invokes the GTK chooser with an empty MIME filter that hides
+/// every regular file (only directories render). Bypassing the renderer's
+/// `<input>` and calling tauri-plugin-dialog directly gives us an unfiltered
+/// `GtkFileChooserNative`. Returns `Ok(None)` when the user cancels.
+#[tauri::command]
+async fn desktop_pick_files(app: tauri::AppHandle) -> Result<Option<Vec<String>>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_files(move |file_paths| {
+        let _ = tx.send(file_paths);
+    });
+
+    let Some(paths) = rx
+        .await
+        .map_err(|_| "File picker was closed unexpectedly".to_string())?
+    else {
+        return Ok(None);
+    };
+
+    let mut resolved = Vec::with_capacity(paths.len());
+    for file_path in paths {
+        let path = file_path
+            .into_path()
+            .map_err(|_| "Selected file is not a local filesystem path".to_string())?;
+        resolved.push(path.to_string_lossy().to_string());
+    }
+
+    Ok(Some(resolved))
+}
+
 #[tauri::command]
 async fn desktop_save_markdown_file(
     app: tauri::AppHandle,
@@ -4312,6 +4346,7 @@ fn main() {
             remote_ssh::desktop_ssh_logs_clear,
             desktop_read_file,
             desktop_read_clipboard_image,
+            desktop_pick_files,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
