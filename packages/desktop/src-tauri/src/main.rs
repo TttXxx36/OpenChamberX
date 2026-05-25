@@ -705,9 +705,19 @@ fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String> {
         return Ok(());
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     {
-        Err("desktop_open_path is only supported on macOS".to_string())
+        let _ = app;
+        linux_external_command("xdg-open")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|err| format!("xdg-open {trimmed}: {err}"))?;
+        return Ok(());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        Err("desktop_open_path is only supported on macOS and Linux".to_string())
     }
 }
 
@@ -769,6 +779,119 @@ fn cli_for_app_id(app_id: &str) -> Option<&'static str> {
         "vscodium" => Some("codium"),
         "windsurf" => Some("windsurf"),
         "zed" => Some("zed"),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn find_program_in_path(name: &str) -> bool {
+    let Some(path_var) = env::var_os("PATH") else {
+        return false;
+    };
+    for dir in env::split_paths(&path_var) {
+        if dir.join(name).is_file() {
+            return true;
+        }
+    }
+    false
+}
+
+/// Build a `Command` for an external GUI program spawned from a Linux desktop session,
+/// scrubbing AppImage / bundler runtime env vars that otherwise leak into the child and
+/// break system Python scripts (e.g. `gnome-terminal`) or system GTK theming. Without
+/// this, `PYTHONHOME=/tmp/.mount_*/usr` is inherited and `gnome-terminal` aborts with
+/// `ModuleNotFoundError: No module named 'encodings'`.
+#[cfg(target_os = "linux")]
+fn linux_external_command(program: &str) -> Command {
+    let mut command = Command::new(program);
+    for var in [
+        "APPDIR",
+        "APPIMAGE",
+        "ARGV0",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONDONTWRITEBYTECODE",
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "GTK_PATH",
+        "GTK_EXE_PREFIX",
+        "GTK_DATA_PREFIX",
+        "GIO_MODULE_DIR",
+        "GDK_PIXBUF_MODULE_FILE",
+        "GDK_PIXBUF_MODULEDIR",
+        "GSETTINGS_SCHEMA_DIR",
+        "XDG_DATA_DIRS_ORIG",
+        "PERLLIB",
+        "GST_PLUGIN_PATH",
+        "GST_PLUGIN_SYSTEM_PATH",
+        "QT_PLUGIN_PATH",
+        "FONTCONFIG_PATH",
+        "FONTCONFIG_FILE",
+    ] {
+        command.env_remove(var);
+    }
+    command
+}
+
+#[cfg(target_os = "linux")]
+fn linux_terminal_command(working_dir: &str) -> Result<(String, Vec<String>), String> {
+    if let Ok(term) = env::var("TERMINAL") {
+        let term = term.trim();
+        if !term.is_empty() && find_program_in_path(term) {
+            return Ok((
+                term.to_string(),
+                vec!["--working-directory".to_string(), working_dir.to_string()],
+            ));
+        }
+    }
+
+    let candidates: &[(&str, &[&str])] = &[
+        ("gnome-terminal", &["--working-directory"]),
+        ("ptyxis", &["--working-directory"]),
+        ("kgx", &["--working-directory"]),
+        ("xfce4-terminal", &["--working-directory"]),
+        ("mate-terminal", &["--working-directory"]),
+        ("tilix", &["--working-directory"]),
+        ("konsole", &["--workdir"]),
+        ("alacritty", &["--working-directory"]),
+        ("kitty", &["--directory"]),
+        ("wezterm", &["start", "--cwd"]),
+        ("foot", &["--working-directory"]),
+        ("urxvt", &["-cd"]),
+        ("xterm", &["-e", "sh", "-c"]),
+    ];
+
+    for (bin, flags) in candidates {
+        if find_program_in_path(bin) {
+            let mut args: Vec<String> = flags.iter().map(|s| s.to_string()).collect();
+            if *bin == "xterm" {
+                args.push(format!("cd '{}' && exec ${{SHELL:-/bin/sh}}", working_dir.replace('\'', "'\\''")));
+            } else {
+                args.push(working_dir.to_string());
+            }
+            return Ok((bin.to_string(), args));
+        }
+    }
+
+    Err("No supported terminal emulator found in PATH".to_string())
+}
+
+#[cfg(target_os = "linux")]
+fn linux_editor_cli_for_app_id(app_id: &str) -> Option<&'static str> {
+    match app_id {
+        "vscode" => Some("code"),
+        "vscodium" => Some("codium"),
+        "cursor" => Some("cursor"),
+        "windsurf" => Some("windsurf"),
+        "zed" => Some("zed"),
+        "sublime-text" => Some("subl"),
+        "intellij" => Some("idea"),
+        "pycharm" => Some("pycharm"),
+        "webstorm" => Some("webstorm"),
+        "phpstorm" => Some("phpstorm"),
+        "rider" => Some("rider"),
+        "rustrover" => Some("rustrover"),
+        "android-studio" => Some("studio"),
         _ => None,
     }
 }
@@ -879,10 +1002,64 @@ fn desktop_open_in_app(
         return run_open_command_chain(&specs);
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        let _ = trimmed_app_name;
+        let project = trimmed_project_path.to_string();
+        let file = normalized_file_path.map(|value| value.to_string());
+
+        if trimmed_app_id == "finder" {
+            return linux_external_command("xdg-open")
+                            .arg(&project)
+                            .spawn()
+                            .map(|_| ())
+                            .map_err(|err| format!("xdg-open {project}: {err}"));
+        }
+
+        if matches!(trimmed_app_id.as_str(), "terminal" | "iterm2" | "ghostty") {
+            let (program, args) = linux_terminal_command(&project)?;
+            return linux_external_command(&program)
+                .args(&args)
+                .spawn()
+                .map(|_| ())
+                .map_err(|err| format!("{program}: {err}"));
+        }
+
+        if let Some(cli) = linux_editor_cli_for_app_id(trimmed_app_id.as_str()) {
+            if find_program_in_path(cli) {
+                let mut command = linux_external_command(cli);
+                command.arg(&project);
+                if let Some(file_path) = file.as_ref() {
+                    command.arg("--goto");
+                    command.arg(file_path);
+                }
+                return command
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|err| format!("{cli}: {err}"));
+            }
+            return Err(format!("'{cli}' not found in PATH"));
+        }
+
+        if let Some(file_path) = file {
+            return linux_external_command("xdg-open")
+                .arg(&file_path)
+                .spawn()
+                .map(|_| ())
+                .map_err(|err| format!("xdg-open {file_path}: {err}"));
+        }
+
+        return linux_external_command("xdg-open")
+                        .arg(&project)
+                        .spawn()
+                        .map(|_| ())
+                        .map_err(|err| format!("xdg-open {project}: {err}"));
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = normalized_file_path;
-        Err("desktop_open_in_app is only supported on macOS".to_string())
+        Err("desktop_open_in_app is only supported on macOS and Linux".to_string())
     }
 }
 
@@ -937,10 +1114,16 @@ fn desktop_filter_installed_apps(apps: Vec<String>) -> Result<Vec<String>, Strin
         return Ok(installed);
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     {
         let _ = apps;
-        Err("desktop_filter_installed_apps is only supported on macOS".to_string())
+        return Ok(Vec::new());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = apps;
+        Err("desktop_filter_installed_apps is only supported on macOS and Linux".to_string())
     }
 }
 
@@ -1044,10 +1227,21 @@ fn desktop_get_installed_apps(
         });
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        let _ = (app, force);
+        let _ = apps;
+        return Ok(InstalledAppsResponse {
+            apps: Vec::new(),
+            has_cache: false,
+            is_cache_stale: false,
+        });
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = apps;
-        Err("desktop_get_installed_apps is only supported on macOS".to_string())
+        Err("desktop_get_installed_apps is only supported on macOS and Linux".to_string())
     }
 }
 
@@ -1090,10 +1284,16 @@ fn desktop_fetch_app_icons(apps: Vec<String>) -> Result<Vec<AppIconPayload>, Str
         return Ok(results);
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     {
         let _ = apps;
-        Err("desktop_fetch_app_icons is only supported on macOS".to_string())
+        return Ok(Vec::new());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = apps;
+        Err("desktop_fetch_app_icons is only supported on macOS and Linux".to_string())
     }
 }
 
