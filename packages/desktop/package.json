@@ -14,7 +14,7 @@
     "tauri:build": "tauri build",
     "build:sidecar": "node ./scripts/build-sidecar.mjs",
     "fix:linux-appimage": "bash ./scripts/fix-linux-appimage.sh",
-    "build:linux": "tauri build && bash ./scripts/fix-linux-appimage.sh",
+    "build:linux": "tauri build; bash ./scripts/fix-linux-appimage.sh",
     "build": "bun -e \"process.exit(0)\"",
     "type-check": "bun -e \"process.exit(0)\"",
     "lint": "bun -e \"process.exit(0)\""

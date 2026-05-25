@@ -80,9 +80,20 @@ if [[ ! -x "$APPIMAGETOOL" ]]; then
   chmod +x "$APPIMAGETOOL"
 fi
 
+DESKTOP_FILE="$(find "$APPDIR" -maxdepth 1 -name '*.desktop' | head -n1)"
+if [[ -n "$DESKTOP_FILE" ]]; then
+  ICON_NAME="$(grep -oP '^Icon=\K.+' "$DESKTOP_FILE" | head -n1)"
+  EXISTING_ICON="$(find "$APPDIR" -maxdepth 1 \( -name '*.png' -o -name '*.svg' -o -name '*.xpm' \) | head -n1)"
+  if [[ -n "$ICON_NAME" && -n "$EXISTING_ICON" && ! -f "$APPDIR/$ICON_NAME.png" && ! -f "$APPDIR/$ICON_NAME.svg" ]]; then
+    EXT="${EXISTING_ICON##*.}"
+    echo "[fix-linux-appimage] Adding icon alias $ICON_NAME.$EXT for appimagetool"
+    cp -f "$EXISTING_ICON" "$APPDIR/$ICON_NAME.$EXT"
+  fi
+fi
+
 echo "[fix-linux-appimage] Repackaging $APPIMAGE_OUT..."
 rm -f "$APPIMAGE_OUT"
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 \
-  "$APPIMAGETOOL" --no-appstream "$APPDIR" "$APPIMAGE_OUT" >/dev/null
+  "$APPIMAGETOOL" --no-appstream "$APPDIR" "$APPIMAGE_OUT"
 
 echo "[fix-linux-appimage] OK: $(ls -la "$APPIMAGE_OUT")"

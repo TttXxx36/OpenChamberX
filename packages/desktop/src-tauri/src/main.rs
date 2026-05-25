@@ -3748,6 +3748,25 @@ fn open_new_window(app: &tauri::AppHandle) {
 }
 
 fn main() {
+    // On Linux, WebKitGTK 2.46+ enables DMABuf-based rendering and accelerated
+    // compositing by default. On a number of Mesa/driver combinations
+    // (notably Ubuntu 24.04 + Intel/iGPU), this leaves the WebView mapped but
+    // never composited (blank window) or crashes the WebProcess when complex
+    // panes (e.g. the diff/Files Changed view) render. Disabling both renderer
+    // paths is the canonical workaround until upstream WebKitGTK ships a fix.
+    // No effect on macOS/Windows builds.
+    #[cfg(target_os = "linux")]
+    {
+        for (key, value) in [
+            ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
+            ("WEBKIT_DISABLE_COMPOSITING_MODE", "1"),
+        ] {
+            if env::var_os(key).is_none() {
+                env::set_var(key, value);
+            }
+        }
+    }
+
     // Ensure localhost traffic never routes through a system/VPN proxy.
     for key in ["NO_PROXY", "no_proxy"] {
         let existing = env::var(key).unwrap_or_default();
