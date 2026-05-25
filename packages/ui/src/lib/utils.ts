@@ -22,6 +22,13 @@ export const isWindows = (): boolean => {
   return /Windows/.test(navigator.userAgent || '');
 };
 
+export const isLinux = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (isMacOS() || isWindows()) return false;
+  return /Linux|X11/.test(ua);
+};
+
 export const getRevealLabelKey = (): I18nKey => {
   if (isMacOS()) return 'common.revealPath.finder';
   if (isWindows()) return 'common.revealPath.fileExplorer';

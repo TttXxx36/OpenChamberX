@@ -1523,6 +1523,9 @@ export const Header: React.FC<HeaderProps> = ({
     if (target.closest('button, a, input, select, textarea')) {
       return;
     }
+    if (target.closest('[role="menu"], [role="menuitem"], [role="dialog"], [role="listbox"], [role="option"], [data-slot^="dropdown-menu"], [data-slot^="popover"], [data-slot^="dialog"], [data-slot^="select"]')) {
+      return;
+    }
     if (e.button !== 0) {
       return;
     }
