@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.11.6] - 2026-05-25
+
+- Desktop/Linux: pasting images from the clipboard into the chat now works on Linux (WebKitGTK no longer drops image bytes from the paste event).
+- Desktop/Linux: the "Attach Files" button now opens a native file picker that shows regular files instead of an empty folder-only view.
+
 ## [1.11.5] - 2026-05-25
 
 - Chat/Input: pending image attachments now show previews, sent image attachments can be cited from assistant messages, and markdown source mode highlights formatting while you type.

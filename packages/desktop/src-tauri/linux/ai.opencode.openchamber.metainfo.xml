@@ -80,6 +80,7 @@
   </provides>
 
   <releases>
+    <release version="1.11.6" date="2026-05-25" />
     <release version="1.11.5" date="2026-05-25" />
   </releases>
 </component>
