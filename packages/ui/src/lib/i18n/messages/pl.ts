@@ -1254,6 +1254,8 @@ export const dict: Record<I18nKey, string> = {
   'diffView.section.files': 'Pliki',
   'diffView.selector.selectFile': 'Wybierz plik',
   'diffView.selector.viewMode': 'Tryb widoku',
+  'diffView.selector.filterPlaceholder': 'Filtruj pliki…',
+  'diffView.selector.noMatches': 'Brak pasujących plików',
   'diffView.state.cleanWorkingTree': 'Drzewo robocze jest czyste, brak zmian do wyświetlenia',
   'diffView.state.failedToLoadDiff': 'Nie udało się wczytać diffu',
   'diffView.state.loadingChanges': 'Ładowanie zmian...',

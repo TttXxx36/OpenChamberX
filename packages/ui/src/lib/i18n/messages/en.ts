@@ -1028,6 +1028,8 @@ export const dict = {
   'diffView.mode.stacked.description': 'Stack all modified files together',
   'diffView.selector.selectFile': 'Select file',
   'diffView.selector.viewMode': 'View mode',
+  'diffView.selector.filterPlaceholder': 'Filter files…',
+  'diffView.selector.noMatches': 'No matching files',
   'diffView.image.original': 'Original',
   'diffView.image.modified': 'Modified',
   'diffView.image.new': 'New',

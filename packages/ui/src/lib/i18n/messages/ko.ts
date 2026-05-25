@@ -1031,6 +1031,8 @@ export const dict: Record<I18nKey, string> = {
   'diffView.mode.stacked.description': '수정된 파일을 모두 쌓아서 표시',
   'diffView.selector.selectFile': '파일 선택',
   'diffView.selector.viewMode': '보기 모드',
+  'diffView.selector.filterPlaceholder': '파일 필터…',
+  'diffView.selector.noMatches': '일치하는 파일 없음',
   'diffView.image.original': '원본',
   'diffView.image.modified': '수정됨',
   'diffView.image.new': '새 파일',

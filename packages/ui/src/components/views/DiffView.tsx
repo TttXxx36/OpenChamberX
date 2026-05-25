@@ -1,5 +1,7 @@
 import React from 'react';
 import type { ToolPart } from '@opencode-ai/sdk/v2';
+import { Combobox } from '@base-ui/react/combobox';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -15,7 +17,6 @@ import {
     DropdownMenuLabel,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
@@ -217,94 +218,218 @@ const formatDiffTotals = (insertions?: number, deletions?: number) => {
 
 interface FileSelectorProps {
     changedFiles: FileEntry[];
-    selectedFile: string | null;
     selectedFileEntry: FileEntry | null;
     onSelectFile: (path: string) => void;
     isMobile: boolean;
-    showModeSelector?: boolean;
-    mode?: DiffTabViewMode;
-    onModeChange?: (mode: DiffTabViewMode) => void;
 }
+
+// Threshold for switching to virtualized rendering. Below this, plain mapping
+// is fine (and avoids virtualizer measurement overhead on small lists).
+const FILE_SELECTOR_VIRTUALIZE_THRESHOLD = 200;
+const FILE_SELECTOR_ROW_PX = 32;
+const FILE_SELECTOR_OVERSCAN = 12;
+type VirtualizerInstance = ReturnType<typeof useVirtualizer<HTMLDivElement, Element>>;
+
+// Renders the file list inside Combobox.Popup. Virtualizes only when the
+// filtered list exceeds the threshold — Combobox.useFilteredItems already
+// applies the current input filter, so we render exactly what the user can see.
+const FileSelectorList: React.FC<{
+    open: boolean;
+    virtualizerRef: React.RefObject<VirtualizerInstance | null>;
+}> = ({ open, virtualizerRef }) => {
+    const filteredItems = Combobox.useFilteredItems<FileEntry>();
+    const scrollElementRef = React.useRef<HTMLDivElement | null>(null);
+    const count = filteredItems.length;
+    const shouldVirtualize = count >= FILE_SELECTOR_VIRTUALIZE_THRESHOLD;
+
+    const virtualizer = useVirtualizer({
+        enabled: open && shouldVirtualize,
+        count,
+        getScrollElement: () => scrollElementRef.current,
+        estimateSize: () => FILE_SELECTOR_ROW_PX,
+        overscan: FILE_SELECTOR_OVERSCAN,
+        paddingStart: 4,
+        paddingEnd: 4,
+    });
+
+    React.useImperativeHandle(virtualizerRef, () => virtualizer);
+
+    // Mount-time measure so the first paint sees real container dimensions.
+    const handleScrollElementRef = React.useCallback(
+        (element: HTMLDivElement | null) => {
+            scrollElementRef.current = element;
+            if (element && shouldVirtualize) {
+                virtualizer.measure();
+            }
+        },
+        [virtualizer, shouldVirtualize],
+    );
+
+    if (count === 0) {
+        return null;
+    }
+
+    if (!shouldVirtualize) {
+        return (
+            <div
+                role="presentation"
+                ref={handleScrollElementRef}
+                className="max-h-[min(70vh,var(--available-height))] overflow-auto overscroll-contain p-1"
+            >
+                {filteredItems.map((file, index) => (
+                    <Combobox.Item
+                        key={file.path}
+                        index={index}
+                        value={file}
+                        className="flex w-full min-w-0 items-center gap-3 rounded-lg py-1 px-2 typography-ui-label outline-none select-none cursor-pointer data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover data-[selected]:bg-interactive-selection data-[selected]:text-interactive-selection-foreground"
+                    >
+                        <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="min-w-0 flex-1 truncate typography-meta">{file.path}</span>
+                        <span className="ml-auto">{formatDiffTotals(file.insertions, file.deletions)}</span>
+                    </Combobox.Item>
+                ))}
+            </div>
+        );
+    }
+
+    const totalSize = virtualizer.getTotalSize();
+    return (
+        <div
+            role="presentation"
+            ref={handleScrollElementRef}
+            className="max-h-[min(70vh,var(--available-height))] overflow-auto overscroll-contain"
+        >
+            <div role="presentation" className="relative w-full" style={{ height: totalSize }}>
+                {virtualizer.getVirtualItems().map((virtualItem) => {
+                    const file = filteredItems[virtualItem.index];
+                    if (!file) return null;
+                    return (
+                        <Combobox.Item
+                            key={virtualItem.key}
+                            index={virtualItem.index}
+                            value={file}
+                            aria-setsize={count}
+                            aria-posinset={virtualItem.index + 1}
+                            className="flex w-full min-w-0 items-center gap-3 rounded-lg px-2 typography-ui-label outline-none select-none cursor-pointer data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover data-[selected]:bg-interactive-selection data-[selected]:text-interactive-selection-foreground"
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: virtualItem.size,
+                                transform: `translateY(${virtualItem.start}px)`,
+                            }}
+                        >
+                            <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span className="min-w-0 flex-1 truncate typography-meta">{file.path}</span>
+                            <span className="ml-auto">{formatDiffTotals(file.insertions, file.deletions)}</span>
+                        </Combobox.Item>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
 
 const FileSelector = React.memo<FileSelectorProps>(({
     changedFiles,
-    selectedFile,
     selectedFileEntry,
     onSelectFile,
     isMobile,
-    showModeSelector = false,
-    mode,
-    onModeChange,
 }) => {
     const { t } = useI18n();
+    const [open, setOpen] = React.useState(false);
+    const virtualizerRef = React.useRef<VirtualizerInstance | null>(null);
+
     const getLabel = React.useCallback((path: string) => {
         if (!isMobile) return path;
         const lastSlash = path.lastIndexOf('/');
         return lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
     }, [isMobile]);
 
+    const handleValueChange = React.useCallback(
+        (value: FileEntry | null) => {
+            if (value) onSelectFile(value.path);
+        },
+        [onSelectFile],
+    );
+
+    // Keep highlighted item scrolled into view during keyboard navigation —
+    // mirrors the Base UI virtualized combobox demo. Without this, ArrowDown
+    // past the rendered window silently moves selection off-screen.
+    const handleItemHighlighted = React.useCallback<
+        NonNullable<React.ComponentProps<typeof Combobox.Root>['onItemHighlighted']>
+    >((_item, details) => {
+        const virtualizer = virtualizerRef.current;
+        if (!virtualizer) return;
+        const { reason, index } = details;
+        const total = virtualizer.options.count;
+        const isStart = index === 0;
+        const isEnd = index === total - 1;
+        const shouldScroll = reason === 'none' || (reason === 'keyboard' && (isStart || isEnd));
+        if (shouldScroll) {
+            queueMicrotask(() => {
+                virtualizer.scrollToIndex(index, { align: isEnd ? 'start' : 'end' });
+            });
+        }
+    }, []);
+
     if (changedFiles.length === 0) return null;
 
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <button className="flex h-7 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-                    {selectedFileEntry ? (
-                        <div className="flex min-w-0 items-center gap-3">
-                            <FileTypeIcon filePath={selectedFileEntry.path} className="h-3.5 w-3.5 flex-shrink-0" />
-                            <span className="min-w-0 flex-1 truncate typography-meta">
-                                {getLabel(selectedFileEntry.path)}
-                            </span>
-                            {formatDiffTotals(selectedFileEntry.insertions, selectedFileEntry.deletions)}
+        <Combobox.Root<FileEntry>
+            virtualized
+            items={changedFiles}
+            value={selectedFileEntry}
+            onValueChange={handleValueChange}
+            open={open}
+            onOpenChange={setOpen}
+            itemToStringLabel={(item) => item?.path ?? ''}
+            isItemEqualToValue={(itemValue, currentValue) => itemValue.path === currentValue?.path}
+            onItemHighlighted={handleItemHighlighted}
+        >
+            <Combobox.Trigger
+                className="flex h-7 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+                {selectedFileEntry ? (
+                    <div className="flex min-w-0 items-center gap-3">
+                        <FileTypeIcon filePath={selectedFileEntry.path} className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="min-w-0 flex-1 truncate typography-meta">
+                            {getLabel(selectedFileEntry.path)}
+                        </span>
+                        {formatDiffTotals(selectedFileEntry.insertions, selectedFileEntry.deletions)}
+                    </div>
+                ) : (
+                    <span className="text-muted-foreground">{t('diffView.selector.selectFile')}</span>
+                )}
+                <Icon name="arrow-down-s" className="size-4 opacity-50" />
+            </Combobox.Trigger>
+
+            <Combobox.Portal>
+                <Combobox.Positioner className="z-50" sideOffset={4} align="start">
+                    <Combobox.Popup
+                        className="z-50 min-w-[320px] max-w-[var(--available-width)] origin-[var(--transform-origin)] rounded-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.8),inset_0_0_0_1px_rgba(0,0,0,0.04),0_0_0_1px_rgba(0,0,0,0.10),0_1px_2px_-0.5px_rgba(0,0,0,0.08),0_4px_8px_-2px_rgba(0,0,0,0.08),0_12px_20px_-4px_rgba(0,0,0,0.08)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),inset_0_0_0_1px_rgba(255,255,255,0.08),0_0_0_1px_rgba(0,0,0,0.36),0_1px_1px_-0.5px_rgba(0,0,0,0.22),0_3px_3px_-1.5px_rgba(0,0,0,0.20),0_6px_6px_-3px_rgba(0,0,0,0.16)] transition-all duration-150 ease-out data-[starting-style]:opacity-0 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[ending-style]:scale-95"
+                        style={{
+                            backgroundColor: 'var(--surface-elevated)',
+                            color: 'var(--surface-elevated-foreground)',
+                        }}
+                    >
+                        <div className="border-b border-border/40 p-2">
+                            <Combobox.Input
+                                placeholder={t('diffView.selector.filterPlaceholder')}
+                                className="h-7 w-full rounded-lg border border-input bg-transparent px-2 typography-meta text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                            />
                         </div>
-                    ) : (
-                        <span className="text-muted-foreground">{t('diffView.selector.selectFile')}</span>
-                    )}
-                    <Icon name="arrow-down-s" className="size-4 opacity-50" />
-                </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="max-h-[70vh] min-w-[320px] overflow-y-auto">
-                {showModeSelector && mode && onModeChange ? (
-                    <>
-                        <DropdownMenuLabel className="typography-meta text-muted-foreground">
-                            {t('diffView.selector.viewMode')}
-                        </DropdownMenuLabel>
-                        <DropdownMenuRadioGroup
-                            value={mode}
-                            onValueChange={(value) => onModeChange(value as DiffTabViewMode)}
-                        >
-                            {DIFF_VIEW_MODE_OPTIONS.map((option) => (
-                                <DropdownMenuRadioItem
-                                    key={option.value}
-                                    value={option.value}
-                                    className="items-center"
-                                >
-                                    <span className="typography-meta text-foreground">
-                                        {t(option.labelKey)}
-                                    </span>
-                                </DropdownMenuRadioItem>
-                            ))}
-                        </DropdownMenuRadioGroup>
-                        <DropdownMenuSeparator />
-                    </>
-                ) : null}
-                <DropdownMenuRadioGroup value={selectedFile ?? ''} onValueChange={onSelectFile}>
-                    {changedFiles.map((file) => (
-                        <DropdownMenuRadioItem key={file.path} value={file.path}>
-                            <div className="flex w-full min-w-0 items-center gap-3">
-                                <FileTypeIcon filePath={file.path} className="h-3.5 w-3.5 flex-shrink-0" />
-                                <span className="min-w-0 flex-1 truncate typography-meta">
-                                    {getLabel(file.path)}
-                                </span>
-                                <span className="ml-auto">
-                                    {formatDiffTotals(file.insertions, file.deletions)}
-                                </span>
-                            </div>
-                        </DropdownMenuRadioItem>
-                    ))}
-                </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-        </DropdownMenu>
+                        <Combobox.Empty className="px-3 py-3 typography-meta text-muted-foreground">
+                            {t('diffView.selector.noMatches')}
+                        </Combobox.Empty>
+                        <Combobox.List>
+                            <FileSelectorList open={open} virtualizerRef={virtualizerRef} />
+                        </Combobox.List>
+                    </Combobox.Popup>
+                </Combobox.Positioner>
+            </Combobox.Portal>
+        </Combobox.Root>
     );
 });
 
@@ -1977,14 +2102,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 {showFileSelector && (
                     <FileSelector
                         changedFiles={changedFiles}
-                        selectedFile={selectedFile}
                         selectedFileEntry={selectedFileEntry}
                         onSelectFile={handleSelectFileAndScroll}
                         isMobile={isMobileLayout}
-                        showModeSelector={isMobileLayout}
-                        mode={diffViewMode}
-                        onModeChange={handleDiffViewModeChange}
                     />
+                )}
+                {isMobileLayout && (
+                    <DiffViewModeSelector mode={diffViewMode} onModeChange={handleDiffViewModeChange} />
                 )}
                 <div className="flex-1" />
                 {selectedFileEntry && (

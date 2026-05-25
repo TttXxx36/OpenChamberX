@@ -994,6 +994,8 @@ export const dict: Record<I18nKey, string> = {
   'diffView.mode.stacked.description': '将所有修改文件堆叠显示',
   'diffView.selector.selectFile': '选择文件',
   'diffView.selector.viewMode': '视图模式',
+  'diffView.selector.filterPlaceholder': '筛选文件…',
+  'diffView.selector.noMatches': '没有匹配的文件',
   'diffView.image.original': '原始',
   'diffView.image.modified': '已修改',
   'diffView.image.new': '新文件',

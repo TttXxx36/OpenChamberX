@@ -994,6 +994,8 @@ export const dict: Record<I18nKey, string> = {
   "diffView.mode.stacked.description": "Muestra todos los archivos modificados en una sola vista.",
   "diffView.selector.selectFile": "Seleccionar archivo",
   "diffView.selector.viewMode": "Modo de visualización",
+  "diffView.selector.filterPlaceholder": "Filtrar archivos…",
+  "diffView.selector.noMatches": "Sin archivos coincidentes",
   "diffView.image.original": "Original",
   "diffView.image.modified": "Modificado",
   "diffView.image.new": "Nuevo",
