@@ -1408,7 +1408,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
             }))
             .sort((a, b) => a.path.localeCompare(b.path));
 
-        if (fileScope === 'lastMessage' && lastMessageFilePaths) {
+        if (fileScope === 'lastMessage') {
+            if (!lastMessageFilePaths) return [];
             return entries.filter((entry) => lastMessageFilePaths.has(entry.path));
         }
         return entries;
