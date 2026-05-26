@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.11.7] - 2026-05-26
+
+- Diff/UI: added a "Last message" scope to the working diff panel so you can filter changed files to only those touched in the latest assistant message.
+- Diff/UI: the file selector in the working diff panel is now virtualised with a combobox for fast filtering across large file lists.
+- Diff/UI: the "Last message" scope now correctly shows an empty state instead of the full working-tree list when no assistant message exists yet in the session.
+
 ## [1.11.6] - 2026-05-25
 
 - Desktop/Linux: pasting images from the clipboard into the chat now works on Linux (WebKitGTK no longer drops image bytes from the paste event).
