@@ -537,8 +537,56 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  build-desktop-electron-windows:
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Electron app (Windows x64)
+        working-directory: packages/electron
+        env:
+          # rebuild-native.mjs reads this to target the right arch.
+          ELECTRON_BUILDER_ARCH: x64
+          # No code signing for first Windows release; CSC_LINK / CSC_KEY_PASSWORD
+          # intentionally omitted. SmartScreen warnings expected; document in
+          # release notes. Add signing in a follow-up.
+        shell: bash
+        run: |
+          bun run build:web-assets
+          bun run bundle:main
+          # npmRebuild=false in package.json, so electron-builder won't
+          # recompile native deps on its own. Rebuild against the Electron
+          # ABI before packaging so better-sqlite3 / node-pty load cleanly.
+          # bun-pty falls back to node-pty at runtime under Electron (see
+          # packages/web/server/lib/terminal/runtime.js).
+          bun run rebuild:native
+          ./node_modules/.bin/electron-builder --win --x64 --publish=never
+
+      - name: Upload Windows artifacts to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.create-release.outputs.version }}
+          files: |
+            packages/electron/dist/*.exe
+            packages/electron/dist/*.blockmap
+            packages/electron/dist/latest.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   finalize-release:
-    needs: [create-release, build-desktop-electron-macos, repackage-electron-as-tauri-update, publish-npm, combine-manifests, combine-electron-manifests, build-desktop-tauri-linux]
+    needs: [create-release, build-desktop-electron-macos, build-desktop-electron-windows, repackage-electron-as-tauri-update, publish-npm, combine-manifests, combine-electron-manifests, build-desktop-tauri-linux]
     runs-on: ubuntu-latest
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

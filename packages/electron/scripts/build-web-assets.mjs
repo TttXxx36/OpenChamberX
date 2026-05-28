@@ -26,6 +26,11 @@ const resolveBun = () => {
   if (typeof process.env.BUN === 'string' && process.env.BUN.trim()) {
     return process.env.BUN.trim();
   }
+  // On Windows there is no /bin/bash; trust that bun is on PATH
+  // (setup-bun puts it there in CI, and dev installs land in PATH too).
+  if (process.platform === 'win32') {
+    return 'bun';
+  }
   const result = spawnSync('/bin/bash', ['-lc', 'command -v bun'], { encoding: 'utf8' });
   const resolved = (result.stdout || '').trim();
   return resolved || 'bun';

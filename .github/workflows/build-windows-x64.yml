@@ -1,0 +1,51 @@
+name: Build Electron Windows (x64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build (branch, tag, or sha)
+        required: false
+        default: ""
+
+jobs:
+  build-windows-electron:
+    name: Build Electron Windows (x64, unsigned)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Electron app (Windows x64)
+        working-directory: packages/electron
+        env:
+          ELECTRON_BUILDER_ARCH: x64
+        shell: bash
+        run: |
+          bun run build:web-assets
+          bun run bundle:main
+          bun run rebuild:native
+          ./node_modules/.bin/electron-builder --win --x64 --publish=never
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openchamber-windows-x64
+          path: |
+            packages/electron/dist/*.exe
+            packages/electron/dist/*.blockmap
+            packages/electron/dist/latest.yml
+          retention-days: 7

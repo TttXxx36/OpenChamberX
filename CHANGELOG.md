@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Desktop/Windows: added Windows desktop builds (NSIS installer + portable, x64). First Windows release ships unsigned, so users will see a SmartScreen warning on first launch — click "More info" → "Run anyway". The terminal automatically uses `node-pty` on Windows; `bun-pty` falls back when it can't load.
+
 ## [1.11.7] - 2026-05-26
 
 - Diff/UI: added a "Last message" scope to the working diff panel so you can filter changed files to only those touched in the latest assistant message.
