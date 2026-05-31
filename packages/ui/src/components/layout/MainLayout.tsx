@@ -6,6 +6,8 @@ import { BottomTerminalDock } from './BottomTerminalDock';
 import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
 import { RightSidebar, RIGHT_SIDEBAR_CONTENT_WIDTH } from './RightSidebar';
 import { ProjectContextPanel, RightSidebarTabs } from './RightSidebarTabs';
+// ContextPanel loaded on-demand — it's a heavy side panel with preview/browser/console functionality.
+const ContextPanel = lazyWithChunkRecovery(() => import('./ContextPanel').then(m => ({ default: m.ContextPanel })));
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
@@ -623,34 +625,39 @@ export const MainLayout: React.FC = () => {
                                 !isSidebarOpen && 'border-l-transparent',
                                 !isRightSidebarOpen && 'border-r-transparent'
                             )} data-page-scroll-lock="true">
-                                <main className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
-                                    <AnimatePresence mode="wait">
-                                        {activeMainTab === 'chat' && (
-                                            <motion.div
-                                                key="chat"
-                                                className="absolute inset-0"
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                transition={{ duration: 0.15 }}
-                                            >
-                                                <ErrorBoundary><ChatView /></ErrorBoundary>
-                                            </motion.div>
-                                        )}
-                                        {secondaryView && (
-                                            <motion.div
-                                                key={activeMainTab}
-                                                className="absolute inset-0"
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                transition={{ duration: 0.15 }}
-                                            >
-                                                <ErrorBoundary>{secondaryView}</ErrorBoundary>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </main>
+                                <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true">
+                                    <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true">
+                                        <main className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
+                                            <AnimatePresence mode="wait">
+                                                {activeMainTab === 'chat' && (
+                                                    <motion.div
+                                                        key="chat"
+                                                        className="absolute inset-0"
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 1 }}
+                                                        exit={{ opacity: 0 }}
+                                                        transition={{ duration: 0.15 }}
+                                                    >
+                                                        <ErrorBoundary><ChatView /></ErrorBoundary>
+                                                    </motion.div>
+                                                )}
+                                                {secondaryView && (
+                                                    <motion.div
+                                                        key={activeMainTab}
+                                                        className="absolute inset-0"
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 1 }}
+                                                        exit={{ opacity: 0 }}
+                                                        transition={{ duration: 0.15 }}
+                                                    >
+                                                        <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </main>
+                                        <React.Suspense fallback={null}><ContextPanel /></React.Suspense>
+                                    </div>
+                                </div>
                                 <StatusBar />
                                 <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
                                     {isBottomTerminalOpen ? (

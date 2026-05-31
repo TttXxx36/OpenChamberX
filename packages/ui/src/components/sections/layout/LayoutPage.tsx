@@ -7,6 +7,12 @@ import type { LayoutPreset } from '@/stores/useUIStore';
 
 const DEFAULT_PRESET_NAMES = new Set(['Full', 'Minimal', 'Review']);
 
+const PRESET_LABELS: Record<string, string> = {
+  'Full': '完整',
+  'Minimal': '极简',
+  'Review': '审查',
+};
+
 export const LayoutPage: React.FC = () => {
   const layoutPresets = useUIStore((state) => state.layoutPresets);
   const saveCurrentLayoutPreset = useUIStore((state) => state.saveCurrentLayoutPreset);
@@ -36,10 +42,10 @@ export const LayoutPage: React.FC = () => {
     <div>
       <div className="mb-1 px-1">
         <h3 className="typography-ui-header font-medium text-foreground">
-          Layout Presets
+          布局预设
         </h3>
         <p className="typography-meta text-muted-foreground mt-1">
-          Save and restore panel layout configurations.
+          保存和恢复面板布局配置。
         </p>
       </div>
 
@@ -50,8 +56,8 @@ export const LayoutPage: React.FC = () => {
             value={inputName}
             onChange={(e) => setInputName(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Preset name…"
-            aria-label="Layout preset name"
+            placeholder="预设名称…"
+            aria-label="布局预设名称"
             className="w-full sm:w-64"
           />
           <Button
@@ -63,7 +69,7 @@ export const LayoutPage: React.FC = () => {
             className="!font-normal"
           >
             <Icon name="save-3" className="h-3.5 w-3.5 mr-1" />
-            Save Current Layout
+            保存当前布局
           </Button>
         </div>
       </section>
@@ -81,7 +87,7 @@ export const LayoutPage: React.FC = () => {
         ))}
         {layoutPresets.length === 0 && (
           <p className="typography-meta text-muted-foreground py-4 text-center">
-            No saved presets. Enter a name above and click Save Current Layout.
+            暂无已保存的预设。在上方输入名称并点击"保存当前布局"。
           </p>
         )}
       </section>
@@ -101,10 +107,10 @@ const PresetRow: React.FC<PresetRowProps> = ({ preset, isDefault, onLoad, onDele
     <div className="flex items-center justify-between rounded-md border border-border bg-[var(--surface-elevated)] px-3 py-2">
       <div className="flex items-center gap-2 min-w-0">
         <Icon name="layout-column" className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="typography-ui-label text-foreground truncate">{preset.name}</span>
+        <span className="typography-ui-label text-foreground truncate">{PRESET_LABELS[preset.name] || preset.name}</span>
         {isDefault && (
           <span className="typography-micro px-1 rounded leading-none pb-px text-[var(--status-muted)] bg-[var(--surface-dim)] shrink-0">
-            Default
+            默认
           </span>
         )}
       </div>
@@ -116,7 +122,7 @@ const PresetRow: React.FC<PresetRowProps> = ({ preset, isDefault, onLoad, onDele
           onClick={() => onLoad(preset.name)}
           className="!font-normal"
         >
-          Load
+          加载
         </Button>
         {!isDefault && (
           <Button
@@ -125,7 +131,7 @@ const PresetRow: React.FC<PresetRowProps> = ({ preset, isDefault, onLoad, onDele
             size="xs"
             onClick={() => onDelete(preset.name)}
             className="!font-normal text-muted-foreground hover:text-foreground"
-            aria-label={`Delete preset "${preset.name}"`}
+            aria-label={`删除预设"${preset.name}"`}
           >
             <Icon name="delete-bin" className="h-3.5 w-3.5" />
           </Button>

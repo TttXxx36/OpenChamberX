@@ -28,8 +28,6 @@ export const dict = {
   'layout.rightSidebar.git': 'Git',
   'layout.rightSidebar.files': 'Files',
   'layout.rightSidebar.context': 'Context',
-  'layout.rightSidebar.tools': 'Tools',
-  'layout.rightSidebar.addTab': 'Add tab',
   'layout.services.instance': 'Instance',
   'layout.services.usage': 'Usage',
   'sessions.sidebar.header.actions.closeSessions': 'Close sessions',
