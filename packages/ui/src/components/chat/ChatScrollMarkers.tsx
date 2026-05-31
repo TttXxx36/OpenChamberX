@@ -21,7 +21,6 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
 }) => {
   const [activeMessageId, setActiveMessageId] = React.useState<string | null>(null);
   const [markerPositions, setMarkerPositions] = React.useState<Map<string, number>>(new Map());
-  const [isHoveringTrack, setIsHoveringTrack] = React.useState(false);
 
   const userMessages = React.useMemo(() => {
     return messages.filter((m) => deriveMessageRole(m.info).isUser);
@@ -115,18 +114,9 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
 
   if (userMessages.length === 0) return null;
 
-  const trackWidth = 'var(--scrollbar-width, 14px)';
-
   return (
     <div
-      className={cn(
-        'absolute right-0 top-0 bottom-0 z-10',
-        'transition-opacity duration-200',
-        isHoveringTrack ? 'opacity-100' : 'opacity-0 hover:opacity-100',
-      )}
-      style={{ width: trackWidth, pointerEvents: isHoveringTrack ? 'auto' : 'none' }}
-      onMouseEnter={() => setIsHoveringTrack(true)}
-      onMouseLeave={() => setIsHoveringTrack(false)}
+      className="absolute right-0 top-0 bottom-0 z-10 w-[14px] opacity-40 hover:opacity-100 transition-opacity duration-200"
     >
       {userMessages.map((msg) => {
         const messageId = String(msg.info.id);
@@ -145,7 +135,7 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
               'transition-all duration-150',
               isActive
                 ? 'bg-[var(--primary)] h-[3px] opacity-90'
-                : 'bg-[var(--muted-foreground)] opacity-25 hover:opacity-60 hover:h-[3px]',
+                : 'bg-[var(--muted-foreground)] opacity-40 hover:opacity-80 hover:h-[3px]',
             )}
             style={{ top: `${top}px` }}
             onClick={() => messageListRef.current?.scrollToMessageId(messageId, { behavior: 'smooth' })}
