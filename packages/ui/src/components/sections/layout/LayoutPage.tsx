@@ -1,0 +1,136 @@
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Icon } from '@/components/icon/Icon';
+import { useUIStore } from '@/stores/useUIStore';
+import type { LayoutPreset } from '@/stores/useUIStore';
+
+const DEFAULT_PRESET_NAMES = new Set(['Full', 'Minimal', 'Review']);
+
+export const LayoutPage: React.FC = () => {
+  const layoutPresets = useUIStore((state) => state.layoutPresets);
+  const saveCurrentLayoutPreset = useUIStore((state) => state.saveCurrentLayoutPreset);
+  const loadLayoutPreset = useUIStore((state) => state.loadLayoutPreset);
+  const deleteLayoutPreset = useUIStore((state) => state.deleteLayoutPreset);
+  const [inputName, setInputName] = React.useState('');
+
+  const handleSave = React.useCallback(() => {
+    const trimmed = inputName.trim();
+    if (!trimmed) return;
+    saveCurrentLayoutPreset(trimmed);
+    setInputName('');
+  }, [inputName, saveCurrentLayoutPreset]);
+
+  const handleKeyDown = React.useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        handleSave();
+      }
+    },
+    [handleSave]
+  );
+
+  const isDefaultPreset = React.useCallback((name: string) => DEFAULT_PRESET_NAMES.has(name), []);
+
+  return (
+    <div>
+      <div className="mb-1 px-1">
+        <h3 className="typography-ui-header font-medium text-foreground">
+          Layout Presets
+        </h3>
+        <p className="typography-meta text-muted-foreground mt-1">
+          Save and restore panel layout configurations.
+        </p>
+      </div>
+
+      {/* Save current layout */}
+      <section className="px-2 pb-4 pt-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input
+            value={inputName}
+            onChange={(e) => setInputName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Preset name…"
+            aria-label="Layout preset name"
+            className="w-full sm:w-64"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            onClick={handleSave}
+            disabled={!inputName.trim()}
+            className="!font-normal"
+          >
+            <Icon name="save-3" className="h-3.5 w-3.5 mr-1" />
+            Save Current Layout
+          </Button>
+        </div>
+      </section>
+
+      {/* Presets list */}
+      <section className="px-2 space-y-1">
+        {layoutPresets.map((preset) => (
+          <PresetRow
+            key={preset.name}
+            preset={preset}
+            isDefault={isDefaultPreset(preset.name)}
+            onLoad={loadLayoutPreset}
+            onDelete={deleteLayoutPreset}
+          />
+        ))}
+        {layoutPresets.length === 0 && (
+          <p className="typography-meta text-muted-foreground py-4 text-center">
+            No saved presets. Enter a name above and click Save Current Layout.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+};
+
+interface PresetRowProps {
+  preset: LayoutPreset;
+  isDefault: boolean;
+  onLoad: (name: string) => void;
+  onDelete: (name: string) => void;
+}
+
+const PresetRow: React.FC<PresetRowProps> = ({ preset, isDefault, onLoad, onDelete }) => {
+  return (
+    <div className="flex items-center justify-between rounded-md border border-border bg-[var(--surface-elevated)] px-3 py-2">
+      <div className="flex items-center gap-2 min-w-0">
+        <Icon name="layout-column" className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="typography-ui-label text-foreground truncate">{preset.name}</span>
+        {isDefault && (
+          <span className="typography-micro px-1 rounded leading-none pb-px text-[var(--status-muted)] bg-[var(--surface-dim)] shrink-0">
+            Default
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          onClick={() => onLoad(preset.name)}
+          className="!font-normal"
+        >
+          Load
+        </Button>
+        {!isDefault && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => onDelete(preset.name)}
+            className="!font-normal text-muted-foreground hover:text-foreground"
+            aria-label={`Delete preset "${preset.name}"`}
+          >
+            <Icon name="delete-bin" className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};

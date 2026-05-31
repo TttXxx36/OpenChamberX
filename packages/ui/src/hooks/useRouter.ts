@@ -3,7 +3,6 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore } from '@/stores/useUIStore';
 import { parseRoute, updateBrowserURL, hasRouteParams } from '@/lib/router';
 import type { RouteState, AppRouteState } from '@/lib/router';
-import type { MainTab } from '@/stores/useUIStore';
 import { resolveSettingsSlug } from '@/lib/settings/metadata';
 
 /**
@@ -181,33 +180,29 @@ export function useRouter(): void {
       return;
     }
 
-    let prevTab: MainTab = useUIStore.getState().activeMainTab;
-    let prevSettingsOpen: boolean = useUIStore.getState().isSettingsDialogOpen;
-    let prevSettingsPath: string = useUIStore.getState().settingsPage;
-    let prevDiffFile: string | null = useUIStore.getState().pendingDiffFile;
+    const unsubscribe = useUIStore.subscribe(
+      (state) => ({
+        tab: state.activeMainTab,
+        settingsOpen: state.isSettingsDialogOpen,
+        settingsPath: state.settingsPage,
+        diffFile: state.pendingDiffFile,
+      }),
+      (current, previous) => {
+        // Skip if we're currently applying a route
+        if (isApplyingRouteRef.current) {
+          return;
+        }
 
-    const unsubscribe = useUIStore.subscribe((state) => {
-      // Skip if we're currently applying a route
-      if (isApplyingRouteRef.current) {
-        return;
-      }
+        const tabChanged = current.tab !== previous.tab;
+        const settingsOpenChanged = current.settingsOpen !== previous.settingsOpen;
+        const settingsPathChanged = current.settingsPath !== previous.settingsPath;
+        const diffFileChanged = current.diffFile !== previous.diffFile && current.tab === 'diff';
 
-      const tabChanged = state.activeMainTab !== prevTab;
-      const settingsOpenChanged = state.isSettingsDialogOpen !== prevSettingsOpen;
-      const settingsPathChanged = state.settingsPage !== prevSettingsPath;
-      const diffFileChanged = state.pendingDiffFile !== prevDiffFile && state.activeMainTab === 'diff';
-
-      // Update tracking vars
-      prevTab = state.activeMainTab;
-      prevSettingsOpen = state.isSettingsDialogOpen;
-      prevSettingsPath = state.settingsPage;
-      prevDiffFile = state.pendingDiffFile;
-
-      // Only sync if something relevant changed
-      if (tabChanged || settingsOpenChanged || settingsPathChanged || diffFileChanged) {
-        syncURLFromState();
-      }
-    });
+        if (tabChanged || settingsOpenChanged || settingsPathChanged || diffFileChanged) {
+          syncURLFromState();
+        }
+      },
+    );
 
     return unsubscribe;
   }, [isVSCode, syncURLFromState]);

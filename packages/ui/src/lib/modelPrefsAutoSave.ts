@@ -4,6 +4,12 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 
 type ModelRef = { providerID: string; modelID: string };
 
+/** Selector — extracts only the model-preference fields relevant to auto-save. */
+const modelPrefsSelector = (state: ReturnType<typeof useUIStore.getState>) => ({
+  favoriteModels: state.favoriteModels,
+  recentModels: state.recentModels,
+});
+
 const refsEqual = (a: ModelRef[], b: ModelRef[]): boolean => {
   if (a === b) return true;
   if (a.length !== b.length) return false;
@@ -13,6 +19,12 @@ const refsEqual = (a: ModelRef[], b: ModelRef[]): boolean => {
   }
   return true;
 };
+
+const modelPrefsEqual = (
+  a: { favoriteModels: ModelRef[]; recentModels: ModelRef[] },
+  b: { favoriteModels: ModelRef[]; recentModels: ModelRef[] },
+): boolean =>
+  refsEqual(a.favoriteModels, b.favoriteModels) && refsEqual(a.recentModels, b.recentModels);
 
 export const startModelPrefsAutoSave = () => {
   if (typeof window === 'undefined') {
@@ -28,8 +40,8 @@ export const startModelPrefsAutoSave = () => {
 
   const flush = () => {
     timer = null;
-    const state = useUIStore.getState();
-    const payload = { favoriteModels: state.favoriteModels, recentModels: state.recentModels };
+    const { favoriteModels, recentModels } = useUIStore.getState();
+    const payload = { favoriteModels, recentModels };
 
     if (
       lastSent &&
@@ -58,14 +70,15 @@ export const startModelPrefsAutoSave = () => {
     timer = window.setTimeout(flush, 1200);
   };
 
-  const unsubscribe = useUIStore.subscribe((state, prevState) => {
-    const next = { favoriteModels: state.favoriteModels, recentModels: state.recentModels };
-    const prev = { favoriteModels: prevState.favoriteModels, recentModels: prevState.recentModels };
-    if (refsEqual(next.favoriteModels, prev.favoriteModels) && refsEqual(next.recentModels, prev.recentModels)) {
-      return;
-    }
-    schedule();
-  });
+  // Subscribe only to model-preference fields using subscribeWithSelector.
+  // The callback fires only when favoriteModels or recentModels actually changes.
+  const unsubscribe = useUIStore.subscribe(
+    modelPrefsSelector,
+    () => {
+      schedule();
+    },
+    { equalityFn: modelPrefsEqual },
+  );
 
   return () => {
     unsubscribe();

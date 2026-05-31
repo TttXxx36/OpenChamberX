@@ -76,6 +76,7 @@ interface SettingsViewProps {
 const pageOrder: SettingsPageSlug[] = [
   'appearance',
   'chat',
+  'layout',
   'notifications',
   'sessions',
   'shortcuts',
@@ -159,6 +160,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return SNIPPETS_SETTINGS_ICON.icon;
     case 'notifications':
       return 'notification-3';
+    case 'layout':
+      return 'layout-column';
     case 'shortcuts':
       return 'command';
     case 'sessions':
@@ -429,6 +432,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const openChamberSectionBySlug: Partial<Record<SettingsPageSlug, OpenChamberSection>> = React.useMemo(() => ({
     appearance: 'visual',
     chat: 'chat',
+    layout: 'layout',
     shortcuts: 'shortcuts',
     sessions: 'sessions',
     notifications: 'notifications',
@@ -474,6 +478,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return t('settings.page.snippets.title');
       case 'notifications':
         return t('settings.page.notifications.title');
+      case 'layout':
+        return 'Layout';
       case 'voice':
         return t('settings.page.voice.title');
       case 'tunnel':
@@ -559,6 +565,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <GitPage />;
       case 'appearance':
       case 'chat':
+      case 'layout':
       case 'shortcuts':
       case 'sessions':
       case 'notifications':

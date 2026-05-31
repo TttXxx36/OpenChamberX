@@ -41,6 +41,10 @@ const SIDE_BY_SIDE_MIN_WIDTH = 1100;
 const DIFF_REQUEST_TIMEOUT_MS = 15000;
 const LARGE_DIFF_CHANGED_LINES = 500;
 
+// Chunked loading: number of file entries to show per batch in stacked view.
+// Prevents mounting hundreds of MultiFileDiffEntry instances at once.
+const VISIBLE_FILE_BATCH_SIZE = 50;
+
 // Perf: limit concurrent expanded diffs in stacked view.
 // Expanding many diffs mounts many Pierre instances + lots of DOM.
 const getStackedViewDefaultExpandedCount = (fileCount: number): number => {
@@ -1152,6 +1156,51 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     );
 });
 
+// Load-more trigger rendered at the bottom of the chunked file list.
+// Uses IntersectionObserver to auto-load the next batch when scrolled near,
+// with a visible button as a fallback for manual action.
+interface ChunkedFileLoaderProps {
+    remainingCount: number;
+    onLoadMore: () => void;
+}
+
+const ChunkedFileLoader = React.memo<ChunkedFileLoaderProps>(({ remainingCount, onLoadMore }) => {
+    const { t } = useI18n();
+    const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+
+    React.useEffect(() => {
+        const sentinel = sentinelRef.current;
+        if (!sentinel || typeof IntersectionObserver === 'undefined') return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting)) {
+                    onLoadMore();
+                }
+            },
+            { rootMargin: '400px 0px', threshold: 0 },
+        );
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [onLoadMore]);
+
+    return (
+        <div
+            ref={sentinelRef}
+            className="flex flex-col items-center gap-2 px-4 py-6"
+        >
+            <button
+                type="button"
+                onClick={onLoadMore}
+                className="typography-ui-label text-primary hover:underline cursor-pointer"
+            >
+                {t('diffView.loadMore', { count: remainingCount })}
+            </button>
+        </div>
+    );
+});
+
 interface DiffViewProps {
     hideStackedFileSidebar?: boolean;
     stackedDefaultCollapsedAll?: boolean;
@@ -1197,6 +1246,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const [diffRetryNonce, setDiffRetryNonce] = React.useState(0);
     const [diffLoadError, setDiffLoadError] = React.useState<string | null>(null);
     const lastDiffRequestRef = React.useRef<string | null>(null);
+
+    // Chunked loading: only render the first N file entries to avoid
+    // mounting hundreds of MultiFileDiffEntry instances at once.
+    const [visibleFileCount, setVisibleFileCount] = React.useState(VISIBLE_FILE_BATCH_SIZE);
 
     const [fileScope, setFileScope] = React.useState<DiffFileScope>('working');
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
@@ -1524,6 +1577,21 @@ export const DiffView: React.FC<DiffViewProps> = ({
             setSelectedFile(changedFiles[0].path);
         }
     }, [changedFiles, selectedFile, pendingDiffFile]);
+
+    // Reset visible file count when the file list changes (e.g., scope switch),
+    // but expand to include the selected file if it's beyond the initial batch.
+    React.useEffect(() => {
+        setVisibleFileCount(VISIBLE_FILE_BATCH_SIZE);
+    }, [changedFiles]);
+
+    React.useEffect(() => {
+        if (selectedFile && changedFiles.length > 0) {
+            const index = changedFiles.findIndex((f) => f.path === selectedFile);
+            if (index >= visibleFileCount) {
+                setVisibleFileCount(index + 1);
+            }
+        }
+    }, [selectedFile, changedFiles, visibleFileCount]);
 
     // Clear selection if file no longer exists
     React.useEffect(() => {
@@ -1939,6 +2007,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
             return selectedFileStaged && path === selectedFile;
         };
 
+        // Chunked loading: only render the first visibleFileCount entries.
+        const visibleFiles = changedFiles.slice(0, visibleFileCount);
+        const remainingCount = changedFiles.length - visibleFileCount;
+
+        const handleLoadMore = () => {
+            setVisibleFileCount((prev) => Math.min(prev + VISIBLE_FILE_BATCH_SIZE, changedFiles.length));
+        };
+
         return (
             <div className="flex flex-1 min-h-0 h-full gap-3 px-3 pb-3 pt-2">
                 {showFileSidebar && (
@@ -1965,7 +2041,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                     data-diff-virtual-content
                 >
                     <div className="flex flex-col gap-3">
-                        {changedFiles.map((file, index) => (
+                        {visibleFiles.map((file, index) => (
                             <MultiFileDiffEntry
                                 key={`${getFileStaged(file.path) ? 'staged' : 'unstaged'}:${file.path}`}
                                 directory={effectiveDirectory}
@@ -1988,6 +2064,12 @@ export const DiffView: React.FC<DiffViewProps> = ({
                                 stagedRevision={indexRevision}
                             />
                         ))}
+                        {remainingCount > 0 && (
+                            <ChunkedFileLoader
+                                remainingCount={remainingCount}
+                                onLoadMore={handleLoadMore}
+                            />
+                        )}
                     </div>
                 </ScrollableOverlay>
             </div>

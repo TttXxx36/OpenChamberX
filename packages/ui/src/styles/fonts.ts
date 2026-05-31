@@ -1,9 +1,4 @@
-
-
-import '@fontsource/ibm-plex-sans/latin-400.css';
-import '@fontsource/ibm-plex-sans/latin-500.css';
-import '@fontsource/ibm-plex-sans/latin-600.css';
-
-import '@fontsource/ibm-plex-mono/latin-400.css';
-import '@fontsource/ibm-plex-mono/latin-500.css';
-import '@fontsource/ibm-plex-mono/latin-600.css';
+// Font imports moved to index.css for earlier browser discovery.
+// This file is kept for backward compatibility — all importers already
+// import index.css separately, so the @font-face declarations are still
+// included in the main CSS bundle.

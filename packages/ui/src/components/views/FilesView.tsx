@@ -1,4 +1,5 @@
 import React from 'react';
+const LazyCodeMirrorEditor = React.lazy(() => import('@/components/ui/CodeMirrorEditor'));
 
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -14,13 +15,10 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { GoToLineDialog } from './GoToLineDialog';
 import { PreviewToggleButton } from './PreviewToggleButton';
 import { JsonTreeView } from '@/components/ui/JsonTreeView';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
-import { languageByExtension, loadLanguageByExtension } from '@/lib/codemirror/languageByExtension';
-import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { File as PierreFile } from '@pierre/diffs/react';
 import {
   Dialog,
@@ -36,8 +34,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { cn, getModifierLabel, getRevealLabelKey, hasModifier } from '@/lib/utils';
 import { getLanguageFromExtension, getImageMimeType, isImageFile } from '@/lib/toolHelpers';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { EditorView } from '@codemirror/view';
-import type { Extension } from '@codemirror/state';
+import type { EditorView } from '@codemirror/view';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useUIStore } from '@/stores/useUIStore';
@@ -77,6 +74,12 @@ type SelectedLineRange = {
   start: number;
   end: number;
 };
+
+/**
+ * Threshold for how many child items to render per directory in the tree.
+ * Beyond this, a "Show N more …" link is shown instead of rendering all nodes.
+ */
+const VIRTUALIZE_THRESHOLD = 200;
 
 const getParentDirectoryPath = (path: string): string => {
   const normalized = normalizePath(path);
@@ -751,6 +754,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const activeDirectoryLoadIdsRef = React.useRef<Map<string, number>>(new Map());
   const nextDirectoryLoadIdRef = React.useRef(0);
 
+  /** Tracks directories where the user clicked "Show N more …" to bypass VIRTUALIZE_THRESHOLD. */
+  const [showAllChildrenDirs, setShowAllChildrenDirs] = React.useState<Set<string>>(() => new Set());
+
   const [searchResults, setSearchResults] = React.useState<FileNode[]>([]);
   const [searching, setSearching] = React.useState(false);
 
@@ -782,6 +788,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [editorViewReadyNonce, setEditorViewReadyNonce] = React.useState(0);
   const pendingNavigationRafRef = React.useRef<number | null>(null);
   const pendingNavigationCycleRef = React.useRef<{ key: string; attempts: number }>({ key: '', attempts: 0 });
+  const [navigationScrollTarget, setNavigationScrollTarget] = React.useState<{ line: number; column?: number } | null>(null);
 
   React.useEffect(() => {
     return () => {
@@ -1062,6 +1069,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     inFlightDirsRef.current = new Set();
     activeDirectoryLoadIdsRef.current = new Map();
     setChildrenByDir((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+    setShowAllChildrenDirs(new Set());
 
     await loadDirectory(root);
   }, [loadDirectory, root]);
@@ -1118,6 +1126,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       inFlightDirsRef.current = new Set();
       activeDirectoryLoadIdsRef.current = new Map();
       setChildrenByDir((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setShowAllChildrenDirs(new Set());
       void loadDirectory(root);
     }
   }, [loadDirectory, root, showGitignored, showHidden]);
@@ -2019,12 +2028,16 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
   function renderTree(dirPath: string, depth: number): React.ReactNode {
     const nodes = childrenByDir[dirPath] ?? [];
+    const thresholdExceeded = nodes.length > VIRTUALIZE_THRESHOLD;
+    const showAll = showAllChildrenDirs.has(dirPath);
+    const visibleNodes = thresholdExceeded && !showAll ? nodes.slice(0, VIRTUALIZE_THRESHOLD) : nodes;
+    const hiddenCount = nodes.length - visibleNodes.length;
 
-    return nodes.map((node, index) => {
+    const items = visibleNodes.map((node, index) => {
       const isDir = node.type === 'directory';
       const isExpanded = isDir && expandedPaths.includes(node.path);
       const isActive = selectedFile?.path === node.path;
-      const isLast = index === nodes.length - 1;
+      const isLast = index === visibleNodes.length - 1 && hiddenCount === 0;
 
       return (
         <li key={node.path} className="relative">
@@ -2062,6 +2075,32 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         </li>
       );
     });
+
+    if (hiddenCount > 0) {
+      items.push(
+        <li key={`${dirPath}__show-more`} className="relative">
+          {depth > 0 && (
+            <span className="absolute top-3.5 left-[-12px] w-3 h-px bg-border/40" />
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setShowAllChildrenDirs((prev) => {
+                const next = new Set(prev);
+                next.add(dirPath);
+                return next;
+              });
+            }}
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left typography-meta text-muted-foreground hover:text-foreground hover:bg-interactive-hover/40 transition-colors"
+          >
+            <Icon name="arrow-down-s" className="size-4 flex-shrink-0" />
+            {'Show ' + hiddenCount + ' more…'}
+          </button>
+        </li>
+      );
+    }
+
+    return items;
   }
 
   const isSelectedImage = Boolean(selectedFile?.path && isImageFile(selectedFile.path));
@@ -2092,32 +2131,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const isHtml = Boolean(selectedFile?.path && isHtmlFile(selectedFile.path));
   const isTextFile = Boolean(selectedFile && !isSelectedImage);
   const canUseShikiFileView = isTextFile && !isMarkdown && !(isHtml && htmlViewMode === 'preview');
-  const staticLanguageExtension = React.useMemo(
-    () => (selectedFilePath ? languageByExtension(selectedFilePath) : null),
-    [selectedFilePath],
-  );
-  const [dynamicLanguageExtension, setDynamicLanguageExtension] = React.useState<Extension | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const selectedPath = selectedFile?.path;
-
-    if (!selectedPath || staticLanguageExtension) {
-      setDynamicLanguageExtension(null);
-      return;
-    }
-
-    setDynamicLanguageExtension(null);
-    void loadLanguageByExtension(selectedPath).then((extension) => {
-      if (!cancelled) {
-        setDynamicLanguageExtension(extension);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedFile?.path, staticLanguageExtension]);
 
   React.useEffect(() => {
     if (!canEdit && textViewMode === 'edit') {
@@ -2324,10 +2337,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
     if (shouldDispatch) {
       pendingNavigationCycleRef.current.attempts += 1;
-      view.dispatch({
-        selection: { anchor: targetPosition },
-        effects: EditorView.scrollIntoView(targetPosition, { y: 'center' }),
-      });
+      setNavigationScrollTarget({ line: targetLineNumber, column: pendingFileNavigation.column || 1 });
       view.focus();
       scheduleNavigationRetry();
       return;
@@ -2340,10 +2350,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           return;
         }
 
-        syncedView.dispatch({
-          selection: { anchor: targetPosition },
-          effects: EditorView.scrollIntoView(targetPosition, { y: 'center' }),
-        });
+        setNavigationScrollTarget({ line: targetLineNumber, column: pendingFileNavigation.column || 1 });
         syncedView.focus();
       });
     }
@@ -2508,35 +2515,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [canEdit, isMobile, shortcutOverrides, textViewMode]);
 
-  const editorExtensions = React.useMemo(() => {
-    if (!selectedFile?.path) {
-      return [createFlexokiCodeMirrorTheme(currentTheme)];
-    }
-
-    const extensions = [createFlexokiCodeMirrorTheme(currentTheme)];
-    const language = staticLanguageExtension ?? dynamicLanguageExtension;
-    if (language) {
-      extensions.push(language);
-    }
-    if (wrapLines) {
-      extensions.push(EditorView.lineWrapping);
-    }
-    if (isMobile) {
-      extensions.push(EditorView.updateListener.of((update) => {
-        if (!update.view.hasFocus) {
-          return;
-        }
-        if (!(update.selectionSet || update.focusChanged || update.viewportChanged || update.geometryChanged)) {
-          return;
-        }
-
-        window.requestAnimationFrame(() => {
-          nudgeEditorSelectionAboveKeyboard(update.view);
-        });
-      }));
-    }
-    return extensions;
-  }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard]);
+  const handleEditorViewUpdate = React.useCallback((update: import('@codemirror/view').ViewUpdate) => {
+    if (!isMobile) return;
+    if (!update.view.hasFocus) return;
+    if (!(update.selectionSet || update.focusChanged || update.viewportChanged || update.geometryChanged)) return;
+    window.requestAnimationFrame(() => {
+      nudgeEditorSelectionAboveKeyboard(update.view);
+    });
+  }, [isMobile, nudgeEditorSelectionAboveKeyboard]);
 
   const pierreTheme = React.useMemo(
     () => ({ light: lightTheme.metadata.id, dark: darkTheme.metadata.id }),
@@ -3260,100 +3246,106 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               ref={editorWrapperRef}
             >
               <div className={cn('h-full', shouldMaskEditorForPendingNavigation && 'invisible')}>
-                <CodeMirrorEditor
-                  value={draftContent}
-                  onChange={setDraftContent}
-                  readOnly={!canEdit}
-                  extensions={editorExtensions}
-                  className="h-full"
-                  blockWidgets={blockWidgets}
-                  onViewReady={(view) => {
-                    editorViewRef.current = view;
-                    setEditorViewReadyNonce((value) => value + 1);
-                    window.requestAnimationFrame(() => {
-                      nudgeEditorSelectionAboveKeyboard(view);
-                    });
-                  }}
-                  onViewDestroy={() => {
-                    if (editorViewRef.current) {
-                      editorViewRef.current = null;
-                    }
-                    setEditorViewReadyNonce((value) => value + 1);
-                  }}
-                  enableSearch
-                  searchOpen={isSearchOpen}
-                  onSearchOpenChange={setIsSearchOpen}
-                  highlightLines={lineSelection
-                    ? {
-                      start: Math.min(lineSelection.start, lineSelection.end),
-                      end: Math.max(lineSelection.start, lineSelection.end),
-                    }
-                    : undefined}
-                  lineNumbersConfig={{
-                    domEventHandlers: {
-                      mousedown: (view: EditorView, line: { from: number; to: number }, event: Event) => {
-                        if (!(event instanceof MouseEvent)) {
-                          return false;
-                        }
-                        if (event.button !== 0) {
-                          return false;
-                        }
-                        event.preventDefault();
+                <React.Suspense fallback={<div className="h-full" />}>
+                  <LazyCodeMirrorEditor
+                    value={draftContent}
+                    onChange={setDraftContent}
+                    readOnly={!canEdit}
+                    className="h-full"
+                    theme={currentTheme}
+                    filePath={selectedFile?.path}
+                    lineWrapping={wrapLines}
+                    blockWidgets={blockWidgets}
+                    scrollToPosition={navigationScrollTarget}
+                    onViewReady={(view) => {
+                      editorViewRef.current = view;
+                      setEditorViewReadyNonce((value) => value + 1);
+                      window.requestAnimationFrame(() => {
+                        nudgeEditorSelectionAboveKeyboard(view);
+                      });
+                    }}
+                    onViewUpdate={handleEditorViewUpdate}
+                    onViewDestroy={() => {
+                      if (editorViewRef.current) {
+                        editorViewRef.current = null;
+                      }
+                      setEditorViewReadyNonce((value) => value + 1);
+                    }}
+                    enableSearch
+                    searchOpen={isSearchOpen}
+                    onSearchOpenChange={setIsSearchOpen}
+                    highlightLines={lineSelection
+                      ? {
+                        start: Math.min(lineSelection.start, lineSelection.end),
+                        end: Math.max(lineSelection.start, lineSelection.end),
+                      }
+                      : undefined}
+                    lineNumbersConfig={{
+                      domEventHandlers: {
+                        mousedown: (view: EditorView, line: { from: number; to: number }, event: Event) => {
+                          if (!(event instanceof MouseEvent)) {
+                            return false;
+                          }
+                          if (event.button !== 0) {
+                            return false;
+                          }
+                          event.preventDefault();
 
-                        const lineNumber = view.state.doc.lineAt(line.from).number;
+                          const lineNumber = view.state.doc.lineAt(line.from).number;
 
-                        // Mobile: tap-to-extend selection
-                          if (isMobile && lineSelection && !event.shiftKey) {
-                            const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
-                            const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
+                          // Mobile: tap-to-extend selection
+                            if (isMobile && lineSelection && !event.shiftKey) {
+                              const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
+                              const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
+                              setLineSelection({ start, end });
+                              isSelectingRef.current = false;
+                              selectionStartRef.current = null;
+                              setIsDragging(false);
+                              return true;
+                            }
+
+                            isSelectingRef.current = true;
+                            selectionStartRef.current = lineNumber;
+                            setIsDragging(true);
+
+                            if (lineSelection && event.shiftKey) {
+                            const start = Math.min(lineSelection.start, lineNumber);
+                            const end = Math.max(lineSelection.end, lineNumber);
                             setLineSelection({ start, end });
+                          } else {
+                            setLineSelection({ start: lineNumber, end: lineNumber });
+                          }
+
+                          return true;
+                        },
+                        mouseover: (view: EditorView, line: { from: number; to: number }, event: Event) => {
+                          if (!(event instanceof MouseEvent)) {
+                            return false;
+                          }
+                          if (event.buttons !== 1) {
+                            return false;
+                          }
+                          if (!isSelectingRef.current || selectionStartRef.current === null) {
+                            return false;
+                          }
+
+                          const lineNumber = view.state.doc.lineAt(line.from).number;
+                            const start = Math.min(selectionStartRef.current, lineNumber);
+                            const end = Math.max(selectionStartRef.current, lineNumber);
+                            setLineSelection({ start, end });
+                            setIsDragging(true);
+                            return false;
+                          },
+                          mouseup: () => {
                             isSelectingRef.current = false;
                             selectionStartRef.current = null;
                             setIsDragging(false);
-                            return true;
-                          }
-
-                          isSelectingRef.current = true;
-                          selectionStartRef.current = lineNumber;
-                          setIsDragging(true);
-
-                          if (lineSelection && event.shiftKey) {
-                          const start = Math.min(lineSelection.start, lineNumber);
-                          const end = Math.max(lineSelection.end, lineNumber);
-                          setLineSelection({ start, end });
-                        } else {
-                          setLineSelection({ start: lineNumber, end: lineNumber });
-                        }
-
-                        return true;
-                      },
-                      mouseover: (view: EditorView, line: { from: number; to: number }, event: Event) => {
-                        if (!(event instanceof MouseEvent)) {
-                          return false;
-                        }
-                        if (event.buttons !== 1) {
-                          return false;
-                        }
-                        if (!isSelectingRef.current || selectionStartRef.current === null) {
-                          return false;
-                        }
-
-                        const lineNumber = view.state.doc.lineAt(line.from).number;
-                          const start = Math.min(selectionStartRef.current, lineNumber);
-                          const end = Math.max(selectionStartRef.current, lineNumber);
-                          setLineSelection({ start, end });
-                          setIsDragging(true);
-                          return false;
+                            return false;
+                          },
                         },
-                        mouseup: () => {
-                          isSelectingRef.current = false;
-                          selectionStartRef.current = null;
-                          setIsDragging(false);
-                          return false;
-                        },
-                      },
-                  }}
-                />
+                    }}
+                  />
+                </React.Suspense>
               </div>
               {shouldMaskEditorForPendingNavigation && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background">
@@ -3457,7 +3449,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               {t('filesView.tree.search.searching')}
             </li>
           ) : searchResults.length > 0 ? (
-            searchResults.map((node) => {
+            (searchResults.length > VIRTUALIZE_THRESHOLD
+              ? searchResults.slice(0, VIRTUALIZE_THRESHOLD)
+              : searchResults
+            ).map((node) => {
               const isActive = selectedFile?.path === node.path;
               return (
                 <li key={node.path}>
@@ -3481,6 +3476,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 </li>
               );
             })
+          ) : searchResults.length > VIRTUALIZE_THRESHOLD ? (
+            <li className="px-2 py-1 typography-meta text-muted-foreground">
+              {'Showing ' + VIRTUALIZE_THRESHOLD + ' of ' + searchResults.length + ' results. Refine your search to narrow results.'}
+            </li>
           ) : hasTree ? (
             renderTree(root, 0)
           ) : (
@@ -3548,24 +3547,29 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           ) : (
             <div className={cn('relative h-full', shouldMaskEditorForPendingNavigation && 'overflow-hidden')}>
               <div className={cn('h-full', shouldMaskEditorForPendingNavigation && 'invisible')}>
-              <CodeMirrorEditor
-                value={draftContent}
-                onChange={setDraftContent}
-                readOnly={!canEdit}
-                extensions={editorExtensions}
-                className="h-full"
-                onViewReady={(view) => {
-                  editorViewRef.current = view;
-                  window.requestAnimationFrame(() => {
-                    nudgeEditorSelectionAboveKeyboard(view);
-                  });
-                }}
-                onViewDestroy={() => {
-                  if (editorViewRef.current) {
-                    editorViewRef.current = null;
-                  }
-                }}
-              />
+              <React.Suspense fallback={<div className="h-full" />}>
+                <LazyCodeMirrorEditor
+                  value={draftContent}
+                  onChange={setDraftContent}
+                  readOnly={!canEdit}
+                  className="h-full"
+                  theme={currentTheme}
+                  filePath={selectedFile?.path}
+                  lineWrapping={wrapLines}
+                  onViewReady={(view) => {
+                    editorViewRef.current = view;
+                    window.requestAnimationFrame(() => {
+                      nudgeEditorSelectionAboveKeyboard(view);
+                    });
+                  }}
+                  onViewUpdate={handleEditorViewUpdate}
+                  onViewDestroy={() => {
+                    if (editorViewRef.current) {
+                      editorViewRef.current = null;
+                    }
+                  }}
+                />
+              </React.Suspense>
               </div>
               {shouldMaskEditorForPendingNavigation && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background">

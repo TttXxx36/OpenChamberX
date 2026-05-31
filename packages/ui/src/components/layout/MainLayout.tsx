@@ -1,11 +1,11 @@
 import React, { useRef, useEffect } from 'react';
-import { animate, motion, useMotionValue } from 'motion/react';
+import { animate, AnimatePresence, motion, useMotionValue } from 'motion/react';
 import { Header } from './Header';
+import { StatusBar } from './StatusBar';
 import { BottomTerminalDock } from './BottomTerminalDock';
 import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
 import { RightSidebar, RIGHT_SIDEBAR_CONTENT_WIDTH } from './RightSidebar';
 import { ProjectContextPanel, RightSidebarTabs } from './RightSidebarTabs';
-import { ContextPanel } from './ContextPanel';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
@@ -367,22 +367,24 @@ export const MainLayout: React.FC = () => {
             return;
         }
 
-        const unsubscribe = useUIStore.subscribe((state, prevState) => {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
+        const unsubscribe = useUIStore.subscribe(
+            (state) => ({
+                isRightSidebarOpen: state.isRightSidebarOpen,
+                isBottomTerminalOpen: state.isBottomTerminalOpen,
+            }),
+            (current, previous) => {
+                const width = window.innerWidth;
+                const height = window.innerHeight;
 
-            const rightCanAutoOpen = width >= RIGHT_SIDEBAR_AUTO_OPEN_WIDTH;
-            const bottomCanAutoOpen =
-                height >= BOTTOM_TERMINAL_AUTO_OPEN_HEIGHT;
+                if (current.isRightSidebarOpen !== previous.isRightSidebarOpen && width >= RIGHT_SIDEBAR_AUTO_OPEN_WIDTH) {
+                    rightSidebarAutoClosedRef.current = false;
+                }
 
-            if (state.isRightSidebarOpen !== prevState.isRightSidebarOpen && rightCanAutoOpen) {
-                rightSidebarAutoClosedRef.current = false;
-            }
-
-            if (state.isBottomTerminalOpen !== prevState.isBottomTerminalOpen && bottomCanAutoOpen) {
-                bottomTerminalAutoClosedRef.current = false;
-            }
-        });
+                if (current.isBottomTerminalOpen !== previous.isBottomTerminalOpen && height >= BOTTOM_TERMINAL_AUTO_OPEN_HEIGHT) {
+                    bottomTerminalAutoClosedRef.current = false;
+                }
+            },
+        );
 
         return () => {
             unsubscribe();
@@ -415,7 +417,6 @@ export const MainLayout: React.FC = () => {
         }
     }, [activeMainTab]);
 
-    const isChatActive = activeMainTab === 'chat';
     const visibleSidebarWidth = React.useMemo(() => {
         const rawWidth = sidebarWidth || SIDEBAR_CONTENT_WIDTH;
         return Math.min(DESKTOP_SIDEBAR_MAX_WIDTH, Math.max(DESKTOP_SIDEBAR_MIN_WIDTH, rawWidth));
@@ -480,19 +481,37 @@ export const MainLayout: React.FC = () => {
                     <div
                         data-page-scroll-lock="true"
                         className={cn(
-                            'flex flex-1 overflow-hidden relative',
+                            'flex flex-1 flex-col overflow-hidden relative',
                             isSettingsDialogOpen && 'hidden'
                         )}
                     >
                         <main className="w-full h-full overflow-hidden bg-background relative" data-page-scroll-lock="true">
-                            <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
-                                <ErrorBoundary><ChatView /></ErrorBoundary>
-                            </div>
-                            {secondaryView && (
-                                <div className="absolute inset-0">
-                                    <ErrorBoundary>{secondaryView}</ErrorBoundary>
-                                </div>
-                            )}
+                            <AnimatePresence mode="wait">
+                                {activeMainTab === 'chat' && (
+                                    <motion.div
+                                        key="chat"
+                                        className="absolute inset-0"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.15 }}
+                                    >
+                                        <ErrorBoundary><ChatView /></ErrorBoundary>
+                                    </motion.div>
+                                )}
+                                {secondaryView && (
+                                    <motion.div
+                                        key={activeMainTab}
+                                        className="absolute inset-0"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.15 }}
+                                    >
+                                        <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                             {isMultiRunLauncherOpen && (
                                 <div className="absolute inset-0 z-10 bg-background">
                                     <ErrorBoundary>
@@ -519,6 +538,7 @@ export const MainLayout: React.FC = () => {
                                 </motion.div>
                             )}
                         </main>
+                        <StatusBar />
                     </div>
 
                     {/* Mobile settings: full screen */}
@@ -603,21 +623,35 @@ export const MainLayout: React.FC = () => {
                                 !isSidebarOpen && 'border-l-transparent',
                                 !isRightSidebarOpen && 'border-r-transparent'
                             )} data-page-scroll-lock="true">
-                                <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true">
-                                    <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true">
-                                        <main className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
-                                            <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
+                                <main className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
+                                    <AnimatePresence mode="wait">
+                                        {activeMainTab === 'chat' && (
+                                            <motion.div
+                                                key="chat"
+                                                className="absolute inset-0"
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={{ duration: 0.15 }}
+                                            >
                                                 <ErrorBoundary><ChatView /></ErrorBoundary>
-                                            </div>
-                                            {secondaryView && (
-                                                <div className="absolute inset-0">
-                                                    <ErrorBoundary>{secondaryView}</ErrorBoundary>
-                                                </div>
-                                            )}
-                                        </main>
-                                        <ContextPanel />
-                                    </div>
-                                </div>
+                                            </motion.div>
+                                        )}
+                                        {secondaryView && (
+                                            <motion.div
+                                                key={activeMainTab}
+                                                className="absolute inset-0"
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={{ duration: 0.15 }}
+                                            >
+                                                <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </main>
+                                <StatusBar />
                                 <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
                                     {isBottomTerminalOpen ? (
                                         <ErrorBoundary>

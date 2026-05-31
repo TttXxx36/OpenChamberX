@@ -116,14 +116,37 @@ export default defineConfig({
           const segments = match.split('/');
           const packageName = match.startsWith('@') ? `${segments[0]}/${segments[1]}` : segments[0];
 
-          if (packageName === 'react' || packageName === 'react-dom') return 'vendor-react';
-          if (packageName === 'zustand' || packageName === 'zustand/middleware') return 'vendor-zustand';
+          // Core framework — react, react-dom, zustand
+          if (packageName === 'react' || packageName === 'react-dom' || packageName === 'zustand' || packageName.startsWith('zustand/')) return 'vendor';
 
+          // OpenCode SDK
           if (packageName === '@opencode-ai/sdk') return 'vendor-opencode-sdk';
-          if (packageName.includes('remark') || packageName.includes('rehype') || packageName === 'react-markdown') return 'vendor-markdown';
-          if (packageName === '@base-ui/react' || packageName.startsWith('@base-ui')) return 'vendor-base-ui';
-          if (packageName.includes('react-syntax-highlighter') || packageName.includes('highlight.js')) return 'vendor-syntax';
 
+          // Markdown processing (remark, rehype, react-markdown)
+          if (packageName.includes('remark') || packageName.includes('rehype') || packageName === 'react-markdown') return 'vendor-markdown';
+
+          // Math rendering in markdown (katex)
+          if (packageName === 'katex' || packageName === 'rehype-katex' || packageName === 'remark-math') return 'vendor-math';
+
+          // CodeMirror editor family (all @codemirror/*, @lezer/* parsers, standalone langs)
+          if (packageName.startsWith('@codemirror') || packageName.startsWith('@lezer') || packageName === 'codemirror-lang-elixir') return 'vendor-codemirror';
+
+          // Base UI primitives
+          if (packageName === '@base-ui/react' || packageName.startsWith('@base-ui')) return 'vendor-base-ui';
+
+          // Syntax highlighting
+          if (packageName.includes('react-syntax-highlighter') || packageName.includes('highlight.js') || packageName === 'prismjs') return 'vendor-syntax';
+
+          // Terminal emulator
+          if (packageName === 'ghostty-web') return 'vendor-terminal';
+
+          // Animation (motion — successor to framer-motion)
+          if (packageName === 'motion' || packageName.startsWith('motion/')) return 'vendor-motion';
+
+          // UI component libraries (Radix, dnd-kit, command, toasts, icons, virtual)
+          if (packageName.startsWith('@radix-ui') || packageName.startsWith('@dnd-kit') || packageName === 'cmdk' || packageName === 'sonner' || packageName === '@remixicon/react' || packageName === '@tanstack/react-virtual') return 'vendor-ui-components';
+
+          // Individual package fallback
           const sanitized = packageName.replace(/^@/, '').replace(/\//g, '-');
           return `vendor-${sanitized}`;
         },

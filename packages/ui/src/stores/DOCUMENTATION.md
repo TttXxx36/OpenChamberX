@@ -223,6 +223,41 @@ Before changing store shape or selectors, ask:
 4. Is there already a store cache for this data?
 5. Am I duplicating fetch ownership in a component when it should live in a store action?
 
+## subscribeWithSelector / Render Discipline
+
+### `useUIStore` — monolithic UI state with `subscribeWithSelector`
+
+`useUIStore` is a large store (~80 state fields + ~60 action methods). All component consumers already use proper leaf selectors (e.g. `useUIStore(s => s.activeMainTab)`) — no component subscribes to the entire store. Zustand's built-in reference equality (`Object.is`) prevents unnecessary re-renders when unrelated fields change.
+
+The store wraps the creator with `subscribeWithSelector` from `zustand/middleware`. This enhances `store.subscribe()` to accept an optional selector and equality function, so imperative subscriptions fire only when their specific slice of state changes.
+
+### Where `subscribe` is used (and which selectors to use)
+
+These files call `useUIStore.subscribe()` imperatively outside React hooks:
+
+| File | Selector Filter |
+|------|----------------|
+| `lib/appearanceAutoSave.ts` | Appearance fields (~29 fields) |
+| `lib/modelPrefsAutoSave.ts` | `favoriteModels`, `recentModels` |
+| `hooks/useRouter.ts` | `activeMainTab`, `isSettingsDialogOpen`, `settingsPage`, `pendingDiffFile` |
+| `components/layout/MainLayout.tsx` | `isRightSidebarOpen`, `isBottomTerminalOpen` |
+
+When adding a new `subscribe()`, always provide a selector + `equalityFn` so the callback does not run on unrelated state changes.
+
+### Exported selector hooks (for co-occurring field groups)
+
+`useUIStore.ts` exports helper hooks that subscribe to common field groups using `useShallow`:
+
+- `useTerminalPanelState()` — terminal panel dimensions and visibility
+- `useDialogVisibility()` — which dialog is open
+- `useLeftSidebarState()` — sidebar open/width/section
+- `useRightSidebarState()` — right sidebar open/width/tab
+- `useDiffPreferences()` — diff layout, wrapping, view mode
+- `useModelListPreferences()` — favorite/hidden/recent models
+- `useNotificationPreferences()` — notification toggles and templates
+
+These hooks return a single shallow-stable object. The component re-renders only when one of the selected fields changes, rather than making 4-9 individual subscriptions.
+
 ## Validation Checklist
 
 After meaningful Git/PR store changes, verify manually:

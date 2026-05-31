@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+import { devtools, persist, createJSONStorage, subscribeWithSelector } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 import type { SidebarSection } from '@/constants/sidebar';
 import { getSafeStorage } from './utils/safeStorage';
 import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey } from '@/lib/typography';
@@ -8,8 +9,24 @@ import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, type MonoFontOption, type UiFontOpt
 import { getStoredMobileKeyboardMode, type MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files' | 'context';
-export type RightSidebarTab = 'git' | 'files' | 'context';
+export type RightSidebarTab = 'git' | 'files' | 'context' | 'tools';
 export type ContextPanelMode = 'diff' | 'file' | 'context' | 'plan' | 'chat' | 'preview' | 'browser';
+
+export interface LayoutPresetState {
+  isSidebarOpen: boolean;
+  sidebarWidth: number;
+  isRightSidebarOpen: boolean;
+  rightSidebarWidth: number;
+  rightSidebarTab: RightSidebarTab;
+  isBottomTerminalOpen: boolean;
+  bottomTerminalHeight: number;
+  activeMainTab: MainTab;
+}
+
+export interface LayoutPreset {
+  name: string;
+  state: LayoutPresetState;
+}
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
 export type ChatRenderMode = 'sorted' | 'live';
@@ -485,7 +502,7 @@ const clampContextPanelRoots = (
   return next;
 };
 
-interface UIStore {
+export interface UIStore {
 
   theme: 'light' | 'dark' | 'system';
   isMultiRunLauncherOpen: boolean;
@@ -608,6 +625,7 @@ interface UIStore {
   isExpandedInput: boolean;
   reportUsage: boolean;
   shortcutOverrides: Record<string, ShortcutCombo>;
+  layoutPresets: LayoutPreset[];
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
@@ -748,12 +766,16 @@ interface UIStore {
   setShortcutOverride: (actionId: string, combo: ShortcutCombo) => void;
   clearShortcutOverride: (actionId: string) => void;
   resetAllShortcutOverrides: () => void;
+  saveCurrentLayoutPreset: (name: string) => void;
+  loadLayoutPreset: (name: string) => void;
+  deleteLayoutPreset: (name: string) => void;
 }
 
 
 export const useUIStore = create<UIStore>()(
   devtools(
     persist(
+      subscribeWithSelector(
       (set, get) => ({
 
         theme: 'system',
@@ -871,6 +893,47 @@ export const useUIStore = create<UIStore>()(
         isExpandedInput: false,
         reportUsage: true,
         shortcutOverrides: {},
+        layoutPresets: [
+          {
+            name: 'Full',
+            state: {
+              isSidebarOpen: true,
+              sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
+              isRightSidebarOpen: true,
+              rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+              rightSidebarTab: 'git',
+              isBottomTerminalOpen: true,
+              bottomTerminalHeight: 300,
+              activeMainTab: 'chat',
+            },
+          },
+          {
+            name: 'Minimal',
+            state: {
+              isSidebarOpen: true,
+              sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
+              isRightSidebarOpen: false,
+              rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+              rightSidebarTab: 'git',
+              isBottomTerminalOpen: false,
+              bottomTerminalHeight: 300,
+              activeMainTab: 'chat',
+            },
+          },
+          {
+            name: 'Review',
+            state: {
+              isSidebarOpen: true,
+              sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
+              isRightSidebarOpen: true,
+              rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+              rightSidebarTab: 'context',
+              isBottomTerminalOpen: false,
+              bottomTerminalHeight: 300,
+              activeMainTab: 'diff',
+            },
+          },
+        ],
 
         setTheme: (theme) => {
           set({ theme });
@@ -1976,6 +2039,65 @@ export const useUIStore = create<UIStore>()(
           set({ shortcutOverrides: {} });
         },
 
+        saveCurrentLayoutPreset: (name) => {
+          const state = get();
+          const trimmedName = name.trim();
+          if (!trimmedName) return;
+
+          const newPreset: LayoutPreset = {
+            name: trimmedName,
+            state: {
+              isSidebarOpen: state.isSidebarOpen,
+              sidebarWidth: state.sidebarWidth,
+              isRightSidebarOpen: state.isRightSidebarOpen,
+              rightSidebarWidth: state.rightSidebarWidth,
+              rightSidebarTab: state.rightSidebarTab,
+              isBottomTerminalOpen: state.isBottomTerminalOpen,
+              bottomTerminalHeight: state.bottomTerminalHeight,
+              activeMainTab: state.activeMainTab,
+            },
+          };
+
+          set((prev) => {
+            const existing = prev.layoutPresets.findIndex(
+              (p) => p.name === trimmedName
+            );
+            if (existing !== -1) {
+              const next = [...prev.layoutPresets];
+              next[existing] = newPreset;
+              return { layoutPresets: next };
+            }
+            return { layoutPresets: [...prev.layoutPresets, newPreset] };
+          });
+        },
+
+        loadLayoutPreset: (name) => {
+          const state = get();
+          const preset = state.layoutPresets.find((p) => p.name === name);
+          if (!preset) return;
+
+          const { state: ps } = preset;
+          set({
+            isSidebarOpen: ps.isSidebarOpen,
+            sidebarWidth: ps.sidebarWidth,
+            isRightSidebarOpen: ps.isRightSidebarOpen,
+            rightSidebarWidth: ps.rightSidebarWidth,
+            rightSidebarTab: ps.rightSidebarTab,
+            isBottomTerminalOpen: ps.isBottomTerminalOpen,
+            bottomTerminalHeight: ps.bottomTerminalHeight,
+            activeMainTab: ps.activeMainTab,
+          });
+        },
+
+        deleteLayoutPreset: (name) => {
+          const DEFAULT_NAMES = new Set(['Full', 'Minimal', 'Review']);
+          if (DEFAULT_NAMES.has(name)) return;
+
+          set((prev) => ({
+            layoutPresets: prev.layoutPresets.filter((p) => p.name !== name),
+          }));
+        },
+
         toggleExpandedInput: () => {
           set((state) => ({ isExpandedInput: !state.isExpandedInput }));
         },
@@ -1983,16 +2105,63 @@ export const useUIStore = create<UIStore>()(
         setExpandedInput: (value) => {
           set({ isExpandedInput: value });
         },
-      }),
+      })),
       {
         name: 'ui-store',
         storage: createJSONStorage(() => getSafeStorage()),
-        version: 9,
+        version: 10,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
           }
           const state = persistedState as Record<string, unknown>;
+
+          // v9 -> v10: initialize layoutPresets with default presets
+          if (version < 10) {
+            if (!state.layoutPresets || !Array.isArray(state.layoutPresets)) {
+              state.layoutPresets = [
+                {
+                  name: 'Full',
+                  state: {
+                    isSidebarOpen: true,
+                    sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
+                    isRightSidebarOpen: true,
+                    rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+                    rightSidebarTab: 'git' as const,
+                    isBottomTerminalOpen: true,
+                    bottomTerminalHeight: 300,
+                    activeMainTab: 'chat' as const,
+                  },
+                },
+                {
+                  name: 'Minimal',
+                  state: {
+                    isSidebarOpen: true,
+                    sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
+                    isRightSidebarOpen: false,
+                    rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+                    rightSidebarTab: 'git' as const,
+                    isBottomTerminalOpen: false,
+                    bottomTerminalHeight: 300,
+                    activeMainTab: 'chat' as const,
+                  },
+                },
+                {
+                  name: 'Review',
+                  state: {
+                    isSidebarOpen: true,
+                    sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
+                    isRightSidebarOpen: true,
+                    rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+                    rightSidebarTab: 'context' as const,
+                    isBottomTerminalOpen: false,
+                    bottomTerminalHeight: 300,
+                    activeMainTab: 'diff' as const,
+                  },
+                },
+              ];
+            }
+          }
 
           // v8 -> v9: initialize notes/todo panel height fields
           if (version < 9) {
@@ -2083,11 +2252,14 @@ export const useUIStore = create<UIStore>()(
           sidebarWidth: state.sidebarWidth,
           isRightSidebarOpen: state.isRightSidebarOpen,
           rightSidebarWidth: state.rightSidebarWidth,
+          hasManuallyResizedLeftSidebar: state.hasManuallyResizedLeftSidebar,
+          hasManuallyResizedRightSidebar: state.hasManuallyResizedRightSidebar,
           rightSidebarTab: state.rightSidebarTab,
           contextPanelByDirectory: state.contextPanelByDirectory,
           isBottomTerminalOpen: state.isBottomTerminalOpen,
           isBottomTerminalExpanded: state.isBottomTerminalExpanded,
           bottomTerminalHeight: state.bottomTerminalHeight,
+          hasManuallyResizedBottomTerminal: state.hasManuallyResizedBottomTerminal,
           notesPanelHeight: state.notesPanelHeight,
           todoPanelHeight: state.todoPanelHeight,
           isSessionSwitcherOpen: state.isSessionSwitcherOpen,
@@ -2153,6 +2325,7 @@ export const useUIStore = create<UIStore>()(
           showMobileSessionStatusBar: state.showMobileSessionStatusBar,
           isMobileSessionStatusBarCollapsed: state.isMobileSessionStatusBarCollapsed,
           shortcutOverrides: state.shortcutOverrides,
+          layoutPresets: state.layoutPresets,
         })
       }
     ),
@@ -2161,3 +2334,97 @@ export const useUIStore = create<UIStore>()(
     }
   )
 );
+
+// ---------------------------------------------------------------------------
+// Exported selector hooks — subscribe to slices of UIStore
+// Components should prefer these over raw useUIStore(s => s.fieldName)
+// for frequently co-occurring field groups.
+// ---------------------------------------------------------------------------
+
+/** Returns a shallow-stable reference to the terminal panel state group. */
+export const useTerminalPanelState = () =>
+  useUIStore(
+    useShallow((s) => ({
+      terminalFontSize: s.terminalFontSize,
+      bottomTerminalHeight: s.bottomTerminalHeight,
+      isBottomTerminalOpen: s.isBottomTerminalOpen,
+      isBottomTerminalExpanded: s.isBottomTerminalExpanded,
+      showTerminalQuickKeysOnDesktop: s.showTerminalQuickKeysOnDesktop,
+    })),
+  );
+
+/** Returns a shallow-stable reference to the main dialog visibility flags. */
+export const useDialogVisibility = () =>
+  useUIStore(
+    useShallow((s) => ({
+      isCommandPaletteOpen: s.isCommandPaletteOpen,
+      isHelpDialogOpen: s.isHelpDialogOpen,
+      isAboutDialogOpen: s.isAboutDialogOpen,
+      isSettingsDialogOpen: s.isSettingsDialogOpen,
+      isSessionCreateDialogOpen: s.isSessionCreateDialogOpen,
+      isScheduledTasksDialogOpen: s.isScheduledTasksDialogOpen,
+      isModelSelectorOpen: s.isModelSelectorOpen,
+      isTimelineDialogOpen: s.isTimelineDialogOpen,
+      isImagePreviewOpen: s.isImagePreviewOpen,
+    })),
+  );
+
+/** Returns a shallow-stable reference to the left-sidebar layout state. */
+export const useLeftSidebarState = () =>
+  useUIStore(
+    useShallow((s) => ({
+      isSidebarOpen: s.isSidebarOpen,
+      sidebarWidth: s.sidebarWidth,
+      hasManuallyResizedLeftSidebar: s.hasManuallyResizedLeftSidebar,
+      sidebarSection: s.sidebarSection,
+    })),
+  );
+
+/** Returns a shallow-stable reference to the right-sidebar layout state. */
+export const useRightSidebarState = () =>
+  useUIStore(
+    useShallow((s) => ({
+      isRightSidebarOpen: s.isRightSidebarOpen,
+      rightSidebarWidth: s.rightSidebarWidth,
+      rightSidebarTab: s.rightSidebarTab,
+    })),
+  );
+
+/** Returns a shallow-stable reference to the diff-view preferences. */
+export const useDiffPreferences = () =>
+  useUIStore(
+    useShallow((s) => ({
+      diffLayoutPreference: s.diffLayoutPreference,
+      diffFileLayout: s.diffFileLayout,
+      diffWrapLines: s.diffWrapLines,
+      diffViewMode: s.diffViewMode,
+    })),
+  );
+
+/** Returns a shallow-stable reference to model list preferences. */
+export const useModelListPreferences = () =>
+  useUIStore(
+    useShallow((s) => ({
+      favoriteModels: s.favoriteModels,
+      hiddenModels: s.hiddenModels,
+      collapsedModelProviders: s.collapsedModelProviders,
+      recentModels: s.recentModels,
+      recentAgents: s.recentAgents,
+      recentEfforts: s.recentEfforts,
+    })),
+  );
+
+/** Returns a shallow-stable reference to notification preferences. */
+export const useNotificationPreferences = () =>
+  useUIStore(
+    useShallow((s) => ({
+      nativeNotificationsEnabled: s.nativeNotificationsEnabled,
+      notificationMode: s.notificationMode,
+      notifyOnSubtasks: s.notifyOnSubtasks,
+      notifyOnCompletion: s.notifyOnCompletion,
+      notifyOnError: s.notifyOnError,
+      notifyOnQuestion: s.notifyOnQuestion,
+      notificationTemplates: s.notificationTemplates,
+      showOpenCodeUpdateNotifications: s.showOpenCodeUpdateNotifications,
+    })),
+  );

@@ -20,6 +20,7 @@ export type SettingsPageSlug =
   | 'magic-prompts'
   | 'snippets'
   | 'notifications'
+  | 'layout'
   | 'voice'
   | 'tunnel';
 
@@ -194,6 +195,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   },
 
   { slug: 'notifications', title: 'Notifications', group: 'general', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
+  { slug: 'layout', title: 'Layout', group: 'general', kind: 'single', keywords: ['layout', 'presets', 'panels', 'sidebar', 'arrangement', 'saved layouts'], },
   { slug: 'voice', title: 'Voice', group: 'advanced', kind: 'single', keywords: ['tts', 'speech', 'voice'], isAvailable: (ctx) => !ctx.isVSCode },
   { slug: 'tunnel', title: 'Remote Tunnel', group: 'advanced', kind: 'single', keywords: ['tunnel', 'cloudflare', 'qr', 'remote', 'mobile', 'share'], isAvailable: (ctx) => !ctx.isVSCode },
 ] as const;

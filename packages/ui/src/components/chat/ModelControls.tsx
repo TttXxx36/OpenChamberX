@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { formatTokens, formatCost } from '@/lib/format';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
 import type { IconName } from "@/components/icon/icons";
@@ -163,20 +164,6 @@ const getModalityIcons = (metadata: ModelMetadata | undefined, direction: 'input
     return result;
 };
 
-const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    compactDisplay: 'short',
-    maximumFractionDigits: 1,
-    minimumFractionDigits: 0,
-});
-
-const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 4,
-    minimumFractionDigits: 2,
-});
-
 const KNOWLEDGE_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
@@ -214,27 +201,6 @@ const EditModeIcon: React.FC<{ mode: EditPermissionMode; className?: string }> =
         return <Icon name="close-circle" className={combinedClassName} style={iconStyle} />;
     }
     return <Icon name="question" className={combinedClassName} style={iconStyle} />;
-};
-
-const formatTokens = (value?: number | null) => {
-    if (typeof value !== 'number' || Number.isNaN(value)) {
-        return '—';
-    }
-
-    if (value === 0) {
-        return '0';
-    }
-
-    const formatted = COMPACT_NUMBER_FORMATTER.format(value);
-    return formatted.endsWith('.0') ? formatted.slice(0, -2) : formatted;
-};
-
-const formatCost = (value?: number | null) => {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-        return '—';
-    }
-
-    return CURRENCY_FORMATTER.format(value);
 };
 
 const getCapabilityIcons = (metadata?: ModelMetadata) => {

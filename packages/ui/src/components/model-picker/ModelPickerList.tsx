@@ -16,6 +16,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { mergeModelMetadataWithLiveModel } from '@/lib/modelMetadata';
 import { cn } from '@/lib/utils';
+import { formatTokens, formatCost } from '@/lib/format';
 import type { ModelMetadata } from '@/types';
 
 export type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
@@ -43,20 +44,6 @@ type IndexSelectionStore = {
   set: (value: number) => void;
 };
 
-const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
-  notation: 'compact',
-  compactDisplay: 'short',
-  maximumFractionDigits: 1,
-  minimumFractionDigits: 0,
-});
-
-const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 4,
-  minimumFractionDigits: 2,
-});
-
 const getModelDisplayName = (model: Record<string, unknown>) => {
   const name = model?.name || model?.id || '';
   const nameStr = String(name);
@@ -64,17 +51,7 @@ const getModelDisplayName = (model: Record<string, unknown>) => {
   return nameStr;
 };
 
-const formatModelContextTokens = (value?: number | null) => {
-  if (typeof value !== 'number' || Number.isNaN(value)) return '';
-  if (value === 0) return '0';
-  const formatted = COMPACT_NUMBER_FORMATTER.format(value);
-  return formatted.endsWith('.0') ? formatted.slice(0, -2) : formatted;
-};
-
-const formatCost = (value?: number | null) => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  return CURRENCY_FORMATTER.format(value);
-};
+const formatModelContextTokens = (value?: number | null) => formatTokens(value, '');
 
 const hasTooltipMetadata = (metadata?: ModelMetadata) => {
   if (!metadata) return false;

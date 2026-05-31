@@ -1,6 +1,12 @@
 import React from 'react';
 
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ProjectNotesTodoPanel } from '@/components/session/ProjectNotesTodoPanel';
 import { GitView } from '@/components/views/GitView';
 import { Icon } from "@/components/icon/Icon";
@@ -12,9 +18,12 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { formatDirectoryName } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { SidebarFilesTree } from './SidebarFilesTree';
 
-type RightTab = 'git' | 'files' | 'context';
+type RightTab = 'git' | 'files' | 'context' | 'tools';
+
+const ContextPanel = lazyWithChunkRecovery(() => import('./ContextPanel').then(m => ({ default: m.ContextPanel })));
 
 /**
  * Keeps git status fresh while the right sidebar is open.
@@ -95,6 +104,7 @@ export const RightSidebarTabs: React.FC = () => {
   const rightSidebarTab = useUIStore((state) => state.rightSidebarTab);
   const setRightSidebarTab = useUIStore((state) => state.setRightSidebarTab);
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
+  const setRightSidebarOpen = useUIStore((state) => state.setRightSidebarOpen);
   const directory = useEffectiveDirectory();
 
   useRightSidebarGitSync(directory, isRightSidebarOpen);
@@ -115,25 +125,62 @@ export const RightSidebarTabs: React.FC = () => {
       label: t('layout.rightSidebar.context'),
       icon: <Icon name="file-list-2" className="h-3.5 w-3.5" />,
     },
+    {
+      id: 'tools',
+      label: t('layout.rightSidebar.tools'),
+      icon: <Icon name="hammer" className="h-3.5 w-3.5" />,
+    },
   ], [t]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar">
-      <div className="h-9 bg-sidebar pt-1 px-2">
+      <div className="flex h-9 items-center gap-0.5 bg-sidebar pt-1 px-2">
         <SortableTabsStrip
           items={tabItems}
           activeId={rightSidebarTab}
           onSelect={(tabID) => setRightSidebarTab(tabID as RightTab)}
           layoutMode="fit"
           variant="active-pill"
-          className="h-full"
+          className="h-full flex-1"
         />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground"
+              aria-label={t('layout.rightSidebar.addTab')}
+            >
+              <Icon name="add" className="size-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={4}>
+            {tabItems.map((tab) => (
+              <DropdownMenuItem
+                key={tab.id}
+                onClick={() => {
+                  setRightSidebarTab(tab.id as RightTab);
+                  if (!isRightSidebarOpen) {
+                    setRightSidebarOpen(true);
+                  }
+                }}
+              >
+                {tab.icon}
+                {tab.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {rightSidebarTab === 'git' && <GitView />}
         {rightSidebarTab === 'files' && <SidebarFilesTree />}
         {rightSidebarTab === 'context' && <ProjectContextPanel />}
+        {rightSidebarTab === 'tools' && (
+          <React.Suspense fallback={<div className="flex-1 min-h-0" />}>
+            <ContextPanel />
+          </React.Suspense>
+        )}
       </div>
     </div>
   );

@@ -21,24 +21,7 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 import { openExternalUrl } from '@/lib/url';
 import type { ModelMetadata } from '@/types';
 import { useI18n } from '@/lib/i18n';
-
-const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
-  notation: 'compact',
-  compactDisplay: 'short',
-  maximumFractionDigits: 1,
-  minimumFractionDigits: 0,
-});
-
-const formatTokens = (value?: number | null) => {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return null;
-  }
-  if (value === 0) {
-    return '0';
-  }
-  const formatted = COMPACT_NUMBER_FORMATTER.format(value);
-  return formatted.endsWith('.0') ? formatted.slice(0, -2) : formatted;
-};
+import { formatTokens } from '@/lib/format';
 
 const ADD_PROVIDER_ID = '__add_provider__';
 
@@ -1053,8 +1036,8 @@ export const ProvidersPage: React.FC = () => {
                     (item) => item.providerID === selectedProvider.id && item.modelID === modelId
                   );
 
-                  const contextTokens = formatTokens(metadata?.limit?.context);
-                  const outputTokens = formatTokens(metadata?.limit?.output);
+                  const contextTokens = formatTokens(metadata?.limit?.context, '');
+                  const outputTokens = formatTokens(metadata?.limit?.output, '');
 
                   const capabilityIcons: Array<{ key: string; icon: IconName; label: string }> = [];
                   if (metadata?.tool_call) capabilityIcons.push({ key: 'tools', icon: "tools", label: t('settings.providers.page.models.capability.toolCalling') });

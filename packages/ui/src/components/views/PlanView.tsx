@@ -1,5 +1,5 @@
 import React from 'react';
-import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
+const LazyCodeMirrorEditor = React.lazy(() => import('@/components/ui/CodeMirrorEditor'));
 import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -18,8 +18,6 @@ import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
-import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
-import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessions } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -32,7 +30,7 @@ import { useGitStore } from '@/stores/useGitStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { EditorView } from '@codemirror/view';
+import type { EditorView } from '@codemirror/view';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { generateBranchName } from '@/lib/git/branchNameGenerator';
 import { parseProjectPlanMarkdown } from '@/lib/openchamberConfig';
@@ -337,16 +335,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
       document.removeEventListener('click', handleClickOutside);
     };
   }, [cancel, editingDraftId, isMobile, lineSelection]);
-
-  const editorExtensions = React.useMemo(() => {
-    const extensions = [createFlexokiCodeMirrorTheme(currentTheme)];
-    const language = languageByExtension(resolvedPath || 'plan.md');
-    if (language) {
-      extensions.push(language);
-    }
-    extensions.push(EditorView.lineWrapping);
-    return extensions;
-  }, [currentTheme, resolvedPath]);
 
   React.useEffect(() => {
     // Saved project plans opened via context panel should work even when session plan mode is off.
@@ -756,74 +744,78 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
                   </div>
                 ) : (
                   <div className="relative h-full" ref={editorWrapperRef}>
-                    <CodeMirrorEditor
-                      value={content}
-                      onChange={setContent}
-                      readOnly={false}
-                      className="h-full"
-                      extensions={editorExtensions}
-                      onViewReady={(view) => { editorViewRef.current = view; }}
-                      onViewDestroy={() => { editorViewRef.current = null; }}
-                      blockWidgets={blockWidgets}
-                      highlightLines={lineSelection
-                        ? {
-                          start: Math.min(lineSelection.start, lineSelection.end),
-                          end: Math.max(lineSelection.start, lineSelection.end),
-                        }
-                        : undefined}
-                      lineNumbersConfig={{
-                        domEventHandlers: {
-                          mousedown: (view, line, event) => {
-                            if (!(event instanceof MouseEvent)) return false;
-                            if (event.button !== 0) return false;
-                            event.preventDefault();
-                            const lineNumber = view.state.doc.lineAt(line.from).number;
+                    <React.Suspense fallback={<div className="h-full w-full" />}>
+                      <LazyCodeMirrorEditor
+                        value={content}
+                        onChange={setContent}
+                        readOnly={false}
+                        className="h-full"
+                        theme={currentTheme}
+                        filePath={resolvedPath || 'plan.md'}
+                        lineWrapping
+                        onViewReady={(view) => { editorViewRef.current = view; }}
+                        onViewDestroy={() => { editorViewRef.current = null; }}
+                        blockWidgets={blockWidgets}
+                        highlightLines={lineSelection
+                          ? {
+                            start: Math.min(lineSelection.start, lineSelection.end),
+                            end: Math.max(lineSelection.start, lineSelection.end),
+                          }
+                          : undefined}
+                        lineNumbersConfig={{
+                          domEventHandlers: {
+                            mousedown: (view, line, event) => {
+                              if (!(event instanceof MouseEvent)) return false;
+                              if (event.button !== 0) return false;
+                              event.preventDefault();
+                              const lineNumber = view.state.doc.lineAt(line.from).number;
 
-                            if (isMobile && lineSelection && !event.shiftKey) {
-                              const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
-                              const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
+                              if (isMobile && lineSelection && !event.shiftKey) {
+                                const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
+                                const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
+                                setLineSelection({ start, end });
+                                isSelectingRef.current = false;
+                                selectionStartRef.current = null;
+                                setIsDragging(false);
+                                return true;
+                              }
+
+                              isSelectingRef.current = true;
+                              selectionStartRef.current = lineNumber;
+                              setIsDragging(true);
+
+                              if (lineSelection && event.shiftKey) {
+                                const start = Math.min(lineSelection.start, lineNumber);
+                                const end = Math.max(lineSelection.end, lineNumber);
+                                setLineSelection({ start, end });
+                              } else {
+                                setLineSelection({ start: lineNumber, end: lineNumber });
+                              }
+
+                              return true;
+                            },
+                            mouseover: (view, line, event) => {
+                              if (!(event instanceof MouseEvent)) return false;
+                              if (event.buttons !== 1) return false;
+                              if (!isSelectingRef.current || selectionStartRef.current === null) return false;
+                              const lineNumber = view.state.doc.lineAt(line.from).number;
+                              const start = Math.min(selectionStartRef.current, lineNumber);
+                              const end = Math.max(selectionStartRef.current, lineNumber);
                               setLineSelection({ start, end });
+                              setIsDragging(true);
+                              return false;
+                            },
+                            mouseup: () => {
                               isSelectingRef.current = false;
                               selectionStartRef.current = null;
                               setIsDragging(false);
-                              return true;
-                            }
-
-                            isSelectingRef.current = true;
-                            selectionStartRef.current = lineNumber;
-                            setIsDragging(true);
-
-                            if (lineSelection && event.shiftKey) {
-                              const start = Math.min(lineSelection.start, lineNumber);
-                              const end = Math.max(lineSelection.end, lineNumber);
-                              setLineSelection({ start, end });
-                            } else {
-                              setLineSelection({ start: lineNumber, end: lineNumber });
-                            }
-
-                            return true;
+                              return false;
+                            },
                           },
-                          mouseover: (view, line, event) => {
-                            if (!(event instanceof MouseEvent)) return false;
-                            if (event.buttons !== 1) return false;
-                            if (!isSelectingRef.current || selectionStartRef.current === null) return false;
-                            const lineNumber = view.state.doc.lineAt(line.from).number;
-                            const start = Math.min(selectionStartRef.current, lineNumber);
-                            const end = Math.max(selectionStartRef.current, lineNumber);
-                            setLineSelection({ start, end });
-                            setIsDragging(true);
-                            return false;
-                          },
-                          mouseup: () => {
-                            isSelectingRef.current = false;
-                            selectionStartRef.current = null;
-                            setIsDragging(false);
-                            return false;
-                          },
-                        },
-                    }}
-                  />
-                </div>
+                        }}
+                      />
+                    </React.Suspense>
+                  </div>
                 )}
               </div>
             </div>

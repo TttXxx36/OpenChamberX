@@ -12,6 +12,7 @@ import { TunnelSettings } from './TunnelSettings';
 import { OpenCodeCliSettings } from './OpenCodeCliSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
+import { LayoutPage } from '@/components/sections/layout/LayoutPage';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
 import { isDesktopLocalOriginActive, isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
@@ -68,11 +69,13 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
 
     // Show specific section content
     const renderSectionContent = () => {
-        switch (section) {
+    switch (section) {
             case 'visual':
-                return <VisualSectionContent />;
+              return <VisualSectionContent />;
             case 'chat':
-                return <ChatSectionContent />;
+              return <ChatSectionContent />;
+            case 'layout':
+              return <LayoutSectionContent />;
             case 'sessions':
                 return <SessionsSectionContent />;
             case 'shortcuts':
@@ -194,4 +197,8 @@ const TunnelSectionContent: React.FC = () => {
         return null;
     }
     return <TunnelSettings />;
+};
+
+const LayoutSectionContent: React.FC = () => {
+    return <LayoutPage />;
 };

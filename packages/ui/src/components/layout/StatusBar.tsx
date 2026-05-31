@@ -1,0 +1,143 @@
+import React from 'react';
+import { Icon } from '@/components/icon/Icon';
+import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { useGitBranchLabel } from '@/stores/useGitStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { cn } from '@/lib/utils';
+import type { SessionContextUsage } from '@/stores/types/sessionTypes';
+
+/**
+ * StatusBar — a 28px bar at the bottom of the main layout,
+ * modelled after the VS Code status bar pattern.
+ *
+ * Left section: git branch, current agent.
+ * Right section: model name, token count, connection indicator.
+ */
+export const StatusBar: React.FC = () => {
+  /* ── Git branch ─────────────────────────────────────────── */
+  const activeProject = useProjectsStore((state) => {
+    if (!state.activeProjectId) return null;
+    return state.projects.find((p) => p.id === state.activeProjectId) ?? null;
+  });
+  const openDirectory = activeProject?.path ?? null;
+  const gitBranch = useGitBranchLabel(openDirectory);
+
+  /* ── Agent name ─────────────────────────────────────────── */
+  const currentAgentName = useConfigStore((state) => state.currentAgentName);
+
+  /* ── Current model ──────────────────────────────────────── */
+  const getCurrentModel = useConfigStore((state) => state.getCurrentModel);
+  const currentModel = getCurrentModel();
+  const modelName = currentModel?.name ?? currentModel?.id ?? '';
+
+  /* ── Connection status ──────────────────────────────────── */
+  const isConnected = useConfigStore((state) => state.isConnected);
+
+  /* ── Token usage (basic count from the current session) ─── */
+  const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
+  const tokenUsage: SessionContextUsage | null = React.useMemo(() => {
+    const limit =
+      currentModel &&
+      typeof currentModel.limit === 'object' &&
+      currentModel.limit !== null
+        ? (currentModel.limit as Record<string, unknown>)
+        : null;
+    const contextLimit =
+      limit && typeof limit.context === 'number' ? limit.context : 0;
+    const outputLimit =
+      limit && typeof limit.output === 'number' ? limit.output : 0;
+    return getContextUsage(contextLimit, outputLimit);
+  }, [currentModel, getContextUsage]);
+
+  /* ── Actions ────────────────────────────────────────────── */
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
+
+  const handleGitClick = React.useCallback(() => {
+    setActiveMainTab('git');
+  }, [setActiveMainTab]);
+
+  const handleModelClick = React.useCallback(() => {
+    setSettingsDialogOpen(true);
+  }, [setSettingsDialogOpen]);
+
+  return (
+    <div
+      className={
+        'flex h-7 items-center justify-between bg-sidebar ' +
+        'px-3 text-[11px] text-muted-foreground select-none shrink-0 ' +
+        'border-t border-border/50'
+      }
+    >
+      {/* ── Left section ─────────────────────────────────────── */}
+      <div className="flex items-center gap-3 min-w-0">
+        {gitBranch && (
+          <button
+            onClick={handleGitClick}
+            className={
+              'flex items-center gap-1 hover:text-foreground ' +
+              'transition-colors focus-visible:outline-none'
+            }
+            title={`Git branch: ${gitBranch}`}
+          >
+            <Icon name="git-branch" className="h-3.5 w-3.5" />
+            <span>{gitBranch}</span>
+          </button>
+        )}
+
+        {currentAgentName && (
+          <span className="flex items-center gap-1">
+            <Icon name="robot-2" className="h-3.5 w-3.5" />
+            <span>{currentAgentName}</span>
+          </span>
+        )}
+      </div>
+
+      {/* ── Right section ────────────────────────────────────── */}
+      <div className="flex items-center gap-3 min-w-0">
+        {modelName && (
+          <button
+            onClick={handleModelClick}
+            className={
+              'flex items-center gap-1 hover:text-foreground ' +
+              'transition-colors focus-visible:outline-none'
+            }
+            title={`Model: ${modelName}`}
+          >
+            <Icon name="brain" className="h-3.5 w-3.5" />
+            <span>{modelName}</span>
+          </button>
+        )}
+
+        {tokenUsage && tokenUsage.totalTokens > 0 && (
+          <span
+            className="flex items-center gap-1"
+            title={`${tokenUsage.totalTokens.toLocaleString()} tokens used`}
+          >
+            <span className="tabular-nums">
+              {tokenUsage.totalTokens.toLocaleString()}
+            </span>
+            <span className="text-[10px]">tokens</span>
+          </span>
+        )}
+
+        {/* Connection indicator */}
+        <span
+          className="flex items-center gap-1"
+          title={isConnected ? 'Connected' : 'Disconnected'}
+        >
+          <span
+            className={cn(
+              'inline-block h-2 w-2 rounded-full',
+              isConnected ? 'bg-green-500' : 'bg-red-500'
+            )}
+          />
+        </span>
+      </div>
+    </div>
+  );
+};
+
+StatusBar.displayName = 'StatusBar';

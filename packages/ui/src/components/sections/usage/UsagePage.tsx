@@ -17,17 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 
-const formatTime = (timestamp: number | null) => {
-  if (!timestamp) return '-';
-  try {
-    return new Date(timestamp).toLocaleTimeString(undefined, {
-      hour: 'numeric',
-      minute: '2-digit'
-    });
-  } catch {
-    return '-';
-  }
-};
+import { formatTime } from '@/lib/format';
 
 interface ModelInfo {
   name: string;

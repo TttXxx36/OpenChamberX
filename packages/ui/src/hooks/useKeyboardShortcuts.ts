@@ -290,7 +290,7 @@ export const useKeyboardShortcuts = () => {
           return;
         }
 
-        const tabs = ['git', 'files', 'context'] as const;
+        const tabs = ['git', 'files', 'context', 'tools'] as const;
         const currentIndex = tabs.indexOf(rightSidebarTab);
         const nextTab = tabs[(currentIndex + 1) % tabs.length];
 

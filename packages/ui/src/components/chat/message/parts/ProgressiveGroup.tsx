@@ -46,9 +46,13 @@ interface ProgressiveGroupProps {
     renderJustificationActions?: (activity: TurnActivityPart) => React.ReactNode;
 }
 
-const ExternalLinkFavicon: React.FC<{ href: string }> = ({ href }) => {
+const ExternalLinkFavicon: React.FC<{ href: string }> = React.memo(({ href }) => {
     const [failed, setFailed] = React.useState(false);
     const faviconUrl = React.useMemo(() => getExternalFaviconUrl(href), [href]);
+
+    const handleError = React.useCallback(() => {
+        setFailed(true);
+    }, []);
 
     if (!faviconUrl || failed) {
         return null;
@@ -63,11 +67,11 @@ const ExternalLinkFavicon: React.FC<{ href: string }> = ({ href }) => {
                 loading="lazy"
                 decoding="async"
                 className="size-3.5 rounded-sm"
-                onError={() => setFailed(true)}
+                onError={handleError}
             />
         </span>
     );
-};
+});
 
 const isActivityRunning = (activity: TurnActivityPart): boolean => {
     if (activity.kind !== 'tool') return false;

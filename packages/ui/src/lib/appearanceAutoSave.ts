@@ -1,43 +1,57 @@
 import { useUIStore } from '@/stores/useUIStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import type { DesktopSettings } from '@/lib/desktop';
-import type { MonoFontOption, UiFontOption } from '@/lib/fontOptions';
-import type { MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 
-type AppearanceSlice = {
-  showReasoningTraces: boolean;
-  collapsibleThinkingBlocks: boolean;
-  showDeletionDialog: boolean;
-  nativeNotificationsEnabled: boolean;
-  notificationMode: 'always' | 'hidden-only';
-  notifyOnSubtasks: boolean;
-  notifyOnCompletion: boolean;
-  notifyOnError: boolean;
-  notifyOnQuestion: boolean;
-  notificationTemplates: {
-    completion: { title: string; message: string };
-    error: { title: string; message: string };
-    question: { title: string; message: string };
-    subtask: { title: string; message: string };
-  };
-  summarizeLastMessage: boolean;
-  summaryThreshold: number;
-  summaryLength: number;
-  maxLastMessageLength: number;
-  autoDeleteEnabled: boolean;
-  autoDeleteAfterDays: number;
-  sessionRetentionAction: 'archive' | 'delete';
-  fontSize: number;
-  terminalFontSize: number;
-  uiFont: UiFontOption;
-  monoFont: MonoFontOption;
-  padding: number;
-  cornerRadius: number;
-  inputBarOffset: number;
-  mobileKeyboardMode: MobileKeyboardMode;
-  diffLayoutPreference: 'dynamic' | 'inline' | 'side-by-side';
-  diffViewMode: 'single' | 'stacked';
-  gitChangesViewMode: 'flat' | 'tree';
+// Fields in UIStore that affect appearance / desktop settings persistence.
+const APPEARANCE_FIELDS = new Set([
+  'showReasoningTraces', 'collapsibleThinkingBlocks', 'showDeletionDialog',
+  'nativeNotificationsEnabled', 'notificationMode',
+  'notifyOnSubtasks', 'notifyOnCompletion', 'notifyOnError', 'notifyOnQuestion',
+  'notificationTemplates',
+  'summarizeLastMessage', 'summaryThreshold', 'summaryLength', 'maxLastMessageLength',
+  'autoDeleteEnabled', 'autoDeleteAfterDays', 'sessionRetentionAction',
+  'fontSize', 'terminalFontSize', 'uiFont', 'monoFont',
+  'padding', 'cornerRadius', 'inputBarOffset', 'mobileKeyboardMode',
+  'diffLayoutPreference', 'diffViewMode', 'gitChangesViewMode',
+] as const);
+
+/** Selector — extracts only the appearance-relevant fields. */
+const appearanceSelector = (state: ReturnType<typeof useUIStore.getState>) => {
+  const slice: Record<string, unknown> = {};
+  for (const key of APPEARANCE_FIELDS) {
+    slice[key] = (state as unknown as Record<string, unknown>)[key];
+  }
+  return slice;
+};
+
+/** Structural equality comparison for the appearance slice (handles nested templates object). */
+const appearanceEqual = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
+  for (const key of APPEARANCE_FIELDS) {
+    if (key === 'notificationTemplates') {
+      if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) return false;
+    } else if (a[key] !== b[key]) {
+      return false;
+    }
+  }
+  return true;
+};
+
+/** Compute the diff between two appearance slices, returning only changed fields. */
+const appearanceDiff = (
+  current: Record<string, unknown>,
+  previous: Record<string, unknown>,
+): Partial<DesktopSettings> => {
+  const diff: Partial<DesktopSettings> = {};
+  for (const key of APPEARANCE_FIELDS) {
+    if (key === 'notificationTemplates') {
+      if (JSON.stringify(current[key]) !== JSON.stringify(previous[key])) {
+        (diff as Record<string, unknown>)[key] = current[key];
+      }
+    } else if (current[key] !== previous[key]) {
+      (diff as Record<string, unknown>)[key] = current[key];
+    }
+  }
+  return diff;
 };
 
 let initialized = false;
@@ -49,36 +63,7 @@ export const startAppearanceAutoSave = (): void => {
 
   initialized = true;
 
-  let previous: AppearanceSlice = {
-    showReasoningTraces: useUIStore.getState().showReasoningTraces,
-    collapsibleThinkingBlocks: useUIStore.getState().collapsibleThinkingBlocks,
-    showDeletionDialog: useUIStore.getState().showDeletionDialog,
-    nativeNotificationsEnabled: useUIStore.getState().nativeNotificationsEnabled,
-    notificationMode: useUIStore.getState().notificationMode,
-    notifyOnSubtasks: useUIStore.getState().notifyOnSubtasks,
-    notifyOnCompletion: useUIStore.getState().notifyOnCompletion,
-    notifyOnError: useUIStore.getState().notifyOnError,
-    notifyOnQuestion: useUIStore.getState().notifyOnQuestion,
-    notificationTemplates: useUIStore.getState().notificationTemplates,
-    summarizeLastMessage: useUIStore.getState().summarizeLastMessage,
-    summaryThreshold: useUIStore.getState().summaryThreshold,
-    summaryLength: useUIStore.getState().summaryLength,
-    maxLastMessageLength: useUIStore.getState().maxLastMessageLength,
-    autoDeleteEnabled: useUIStore.getState().autoDeleteEnabled,
-    autoDeleteAfterDays: useUIStore.getState().autoDeleteAfterDays,
-    sessionRetentionAction: useUIStore.getState().sessionRetentionAction,
-    fontSize: useUIStore.getState().fontSize,
-    terminalFontSize: useUIStore.getState().terminalFontSize,
-    uiFont: useUIStore.getState().uiFont,
-    monoFont: useUIStore.getState().monoFont,
-    padding: useUIStore.getState().padding,
-    cornerRadius: useUIStore.getState().cornerRadius,
-    inputBarOffset: useUIStore.getState().inputBarOffset,
-    mobileKeyboardMode: useUIStore.getState().mobileKeyboardMode,
-    diffLayoutPreference: useUIStore.getState().diffLayoutPreference,
-    diffViewMode: useUIStore.getState().diffViewMode,
-    gitChangesViewMode: useUIStore.getState().gitChangesViewMode,
-  };
+  let previous = appearanceSelector(useUIStore.getState());
 
   let pending: Partial<DesktopSettings> | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -100,130 +85,17 @@ export const startAppearanceAutoSave = (): void => {
     timer = setTimeout(flush, 150);
   };
 
-  useUIStore.subscribe((state) => {
-    const current: AppearanceSlice = {
-      showReasoningTraces: state.showReasoningTraces,
-      collapsibleThinkingBlocks: state.collapsibleThinkingBlocks,
-      showDeletionDialog: state.showDeletionDialog,
-      nativeNotificationsEnabled: state.nativeNotificationsEnabled,
-      notificationMode: state.notificationMode,
-      notifyOnSubtasks: state.notifyOnSubtasks,
-      notifyOnCompletion: state.notifyOnCompletion,
-      notifyOnError: state.notifyOnError,
-      notifyOnQuestion: state.notifyOnQuestion,
-      notificationTemplates: state.notificationTemplates,
-      summarizeLastMessage: state.summarizeLastMessage,
-      summaryThreshold: state.summaryThreshold,
-      summaryLength: state.summaryLength,
-      maxLastMessageLength: state.maxLastMessageLength,
-      autoDeleteEnabled: state.autoDeleteEnabled,
-      autoDeleteAfterDays: state.autoDeleteAfterDays,
-      sessionRetentionAction: state.sessionRetentionAction,
-      fontSize: state.fontSize,
-      terminalFontSize: state.terminalFontSize,
-      uiFont: state.uiFont,
-      monoFont: state.monoFont,
-      padding: state.padding,
-      cornerRadius: state.cornerRadius,
-      inputBarOffset: state.inputBarOffset,
-      mobileKeyboardMode: state.mobileKeyboardMode,
-      diffLayoutPreference: state.diffLayoutPreference,
-      diffViewMode: state.diffViewMode,
-      gitChangesViewMode: state.gitChangesViewMode,
-    };
-
-    const diff: Partial<DesktopSettings> = {};
-
-    if (current.showReasoningTraces !== previous.showReasoningTraces) {
-      diff.showReasoningTraces = current.showReasoningTraces;
-    }
-    if (current.collapsibleThinkingBlocks !== previous.collapsibleThinkingBlocks) {
-      diff.collapsibleThinkingBlocks = current.collapsibleThinkingBlocks;
-    }
-    if (current.showDeletionDialog !== previous.showDeletionDialog) {
-      diff.showDeletionDialog = current.showDeletionDialog;
-    }
-    if (current.nativeNotificationsEnabled !== previous.nativeNotificationsEnabled) {
-      diff.nativeNotificationsEnabled = current.nativeNotificationsEnabled;
-    }
-    if (current.notificationMode !== previous.notificationMode) {
-      diff.notificationMode = current.notificationMode;
-    }
-    if (current.notifyOnSubtasks !== previous.notifyOnSubtasks) {
-      diff.notifyOnSubtasks = current.notifyOnSubtasks;
-    }
-    if (current.notifyOnCompletion !== previous.notifyOnCompletion) {
-      diff.notifyOnCompletion = current.notifyOnCompletion;
-    }
-    if (current.notifyOnError !== previous.notifyOnError) {
-      diff.notifyOnError = current.notifyOnError;
-    }
-    if (current.notifyOnQuestion !== previous.notifyOnQuestion) {
-      diff.notifyOnQuestion = current.notifyOnQuestion;
-    }
-    if (JSON.stringify(current.notificationTemplates) !== JSON.stringify(previous.notificationTemplates)) {
-      diff.notificationTemplates = current.notificationTemplates;
-    }
-    if (current.summarizeLastMessage !== previous.summarizeLastMessage) {
-      diff.summarizeLastMessage = current.summarizeLastMessage;
-    }
-    if (current.summaryThreshold !== previous.summaryThreshold) {
-      diff.summaryThreshold = current.summaryThreshold;
-    }
-    if (current.summaryLength !== previous.summaryLength) {
-      diff.summaryLength = current.summaryLength;
-    }
-    if (current.maxLastMessageLength !== previous.maxLastMessageLength) {
-      diff.maxLastMessageLength = current.maxLastMessageLength;
-    }
-    if (current.autoDeleteEnabled !== previous.autoDeleteEnabled) {
-      diff.autoDeleteEnabled = current.autoDeleteEnabled;
-    }
-    if (current.autoDeleteAfterDays !== previous.autoDeleteAfterDays) {
-      diff.autoDeleteAfterDays = current.autoDeleteAfterDays;
-    }
-    if (current.sessionRetentionAction !== previous.sessionRetentionAction) {
-      diff.sessionRetentionAction = current.sessionRetentionAction;
-    }
-    if (current.fontSize !== previous.fontSize) {
-      diff.fontSize = current.fontSize;
-    }
-    if (current.terminalFontSize !== previous.terminalFontSize) {
-      diff.terminalFontSize = current.terminalFontSize;
-    }
-    if (current.uiFont !== previous.uiFont) {
-      diff.uiFont = current.uiFont;
-    }
-    if (current.monoFont !== previous.monoFont) {
-      diff.monoFont = current.monoFont;
-    }
-    if (current.padding !== previous.padding) {
-      diff.padding = current.padding;
-    }
-    if (current.cornerRadius !== previous.cornerRadius) {
-      diff.cornerRadius = current.cornerRadius;
-    }
-    if (current.inputBarOffset !== previous.inputBarOffset) {
-      diff.inputBarOffset = current.inputBarOffset;
-    }
-    if (current.mobileKeyboardMode !== previous.mobileKeyboardMode) {
-      diff.mobileKeyboardMode = current.mobileKeyboardMode;
-    }
-    if (current.diffLayoutPreference !== previous.diffLayoutPreference) {
-      diff.diffLayoutPreference = current.diffLayoutPreference;
-    }
-    if (current.diffViewMode !== previous.diffViewMode) {
-      diff.diffViewMode = current.diffViewMode;
-    }
-    if (current.gitChangesViewMode !== previous.gitChangesViewMode) {
-      diff.gitChangesViewMode = current.gitChangesViewMode;
-    }
-
-    previous = current;
-
-    if (Object.keys(diff).length > 0) {
-      schedule(diff);
-    }
-  });
-
+  // Subscribe only to appearance-relevant fields using subscribeWithSelector.
+  // The callback fires only when one of the selected fields actually changes.
+  useUIStore.subscribe(
+    appearanceSelector,
+    (current) => {
+      const diff = appearanceDiff(current, previous);
+      previous = current;
+      if (Object.keys(diff).length > 0) {
+        schedule(diff);
+      }
+    },
+    { equalityFn: appearanceEqual },
+  );
 };

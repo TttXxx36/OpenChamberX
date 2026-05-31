@@ -3,7 +3,6 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { toast } from '@/components/ui';
 import { useSkillsStore, type SkillConfig, type SkillScope, type SupportingFile, type PendingFile } from '@/stores/useSkillsStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -33,12 +32,10 @@ import {
   type SkillLocationValue,
 } from './skillLocations';
 import { useI18n } from '@/lib/i18n';
-import { languageByExtension } from '@/lib/codemirror/languageByExtension';
-import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { cn } from '@/lib/utils';
-import { EditorView } from '@codemirror/view';
-import type { Extension } from '@codemirror/state';
+
+const LazyCodeMirrorEditor = React.lazy(() => import('@/components/ui/CodeMirrorEditor'));
 
 export interface SkillsPageProps {
   view?: 'installed' | 'catalog';
@@ -240,27 +237,6 @@ const SkillsInstalledPage: React.FC = () => {
 
     loadSkillDetails();
   }, [selectedSkill, isNewSkill, selectedSkillName, skills, skillDraft, getSkillDetail]);
-
-  const skillEditorExtensions = React.useMemo<Extension[]>(() => {
-    const extensions: Extension[] = [createFlexokiCodeMirrorTheme(currentTheme)];
-    const markdownExtension = languageByExtension(SKILL_DOCUMENT_PATH);
-    if (markdownExtension) {
-      extensions.push(markdownExtension);
-    }
-    extensions.push(EditorView.lineWrapping);
-    return extensions;
-  }, [currentTheme]);
-
-  const supportingFileEditorExtensions = React.useMemo<Extension[]>(() => {
-    const filePath = newFileName.trim() || 'supporting-file.md';
-    const extensions: Extension[] = [createFlexokiCodeMirrorTheme(currentTheme)];
-    const languageExtension = languageByExtension(filePath);
-    if (languageExtension) {
-      extensions.push(languageExtension);
-    }
-    extensions.push(EditorView.lineWrapping);
-    return extensions;
-  }, [currentTheme, newFileName]);
 
   const handleDescriptionChange = React.useCallback((nextDescription: string) => {
     setDescription(nextDescription);
@@ -612,14 +588,18 @@ const SkillsInstalledPage: React.FC = () => {
                   </div>
                 </ScrollableOverlay>
               ) : (
-                <CodeMirrorEditor
-                  value={skillMarkdown}
-                  onChange={handleSkillMarkdownChange}
-                  readOnly={isReadOnlySkill}
-                  extensions={skillEditorExtensions}
-                  className="h-full"
-                  enableSearch
-                />
+                <React.Suspense fallback={<div className="h-full" />}>
+                  <LazyCodeMirrorEditor
+                    value={skillMarkdown}
+                    onChange={handleSkillMarkdownChange}
+                    readOnly={isReadOnlySkill}
+                    className="h-full"
+                    theme={currentTheme}
+                    filePath={SKILL_DOCUMENT_PATH}
+                    lineWrapping
+                    enableSearch
+                  />
+                </React.Suspense>
               )}
             </div>
           </section>
@@ -768,13 +748,17 @@ const SkillsInstalledPage: React.FC = () => {
                   {t('settings.skills.page.fileDialog.field.content')}
                 </label>
                 <div className="h-[45vh] min-h-[250px] max-h-[55vh] overflow-hidden rounded-md border border-[var(--surface-subtle)] bg-background">
-                  <CodeMirrorEditor
-                    value={newFileContent}
-                    onChange={setNewFileContent}
-                    extensions={supportingFileEditorExtensions}
-                    className="h-full"
-                    enableSearch
-                  />
+                  <React.Suspense fallback={<div className="h-full" />}>
+                    <LazyCodeMirrorEditor
+                      value={newFileContent}
+                      onChange={setNewFileContent}
+                      className="h-full"
+                      theme={currentTheme}
+                      filePath={newFileName.trim() || 'supporting-file.md'}
+                      lineWrapping
+                      enableSearch
+                    />
+                  </React.Suspense>
                 </div>
               </div>
             </div>

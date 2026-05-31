@@ -9,16 +9,30 @@ interface TurnListProps<TEntry extends TurnListEntry> {
     renderEntry: (entry: TEntry) => React.ReactNode;
 }
 
+interface TurnListItemProps<TEntry extends TurnListEntry> {
+    entry: TEntry;
+    renderEntry: (entry: TEntry) => React.ReactNode;
+}
+
+const TurnListItemComponent = <TEntry extends TurnListEntry>({ entry, renderEntry }: TurnListItemProps<TEntry>): React.ReactElement => {
+    return (
+        <div data-turn-entry={entry.key}>
+            {renderEntry(entry)}
+        </div>
+    );
+};
+
+const MemoizedTurnListItem = React.memo(TurnListItemComponent) as typeof TurnListItemComponent;
+
 const TurnList = <TEntry extends TurnListEntry>({ entries, renderEntry }: TurnListProps<TEntry>): React.ReactElement => {
     return (
         <>
             {entries.map((entry) => (
-                <div
+                <MemoizedTurnListItem
                     key={entry.key}
-                    data-turn-entry={entry.key}
-                >
-                    {renderEntry(entry)}
-                </div>
+                    entry={entry}
+                    renderEntry={renderEntry}
+                />
             ))}
         </>
     );

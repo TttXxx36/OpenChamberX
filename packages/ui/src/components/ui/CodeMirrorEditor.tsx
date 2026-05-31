@@ -8,6 +8,9 @@ import { forceParsing, indentUnit } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel, closeSearchPanel, searchPanelOpen, getSearchQuery } from '@codemirror/search';
 import { createPortal } from 'react-dom';
 
+import type { Theme } from '@/types/theme';
+import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
+import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { cn } from '@/lib/utils';
 
 /** Patches `title` attributes onto CodeMirror search-panel controls for icon-only tooltips. */
@@ -141,6 +144,16 @@ type CodeMirrorEditorProps = {
   enableSearch?: boolean;
   searchOpen?: boolean;
   onSearchOpenChange?: (open: boolean) => void;
+  /** Enable line wrapping in the editor */
+  lineWrapping?: boolean;
+  /** File path used to auto-detect the language for syntax highlighting */
+  filePath?: string;
+  /** Theme object for generating the CodeMirror syntax theme */
+  theme?: Theme;
+  /** When set, scrolls the editor to the given line (and optional column) */
+  scrollToPosition?: { line: number; column?: number } | null;
+  /** Called on every view update; useful for mobile keyboard nudge etc. */
+  onViewUpdate?: (update: import('@codemirror/view').ViewUpdate) => void;
 };
 
 const lineNumbersCompartment = new Compartment();
@@ -149,6 +162,8 @@ const externalExtensionsCompartment = new Compartment();
 const highlightLinesCompartment = new Compartment();
 const blockWidgetsCompartment = new Compartment();
 const searchCompartment = new Compartment();
+const lineWrappingCompartment = new Compartment();
+const autoExtensionsCompartment = new Compartment();
 
 const toViewKeyBindings = (bindings: readonly unknown[]): readonly KeyBinding[] => {
   return bindings as readonly KeyBinding[];
@@ -265,6 +280,11 @@ export function CodeMirrorEditor({
   enableSearch,
   searchOpen,
   onSearchOpenChange,
+  lineWrapping,
+  filePath,
+  theme,
+  scrollToPosition,
+  onViewUpdate,
 }: CodeMirrorEditorProps) {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const viewRef = React.useRef<EditorView | null>(null);
@@ -273,6 +293,7 @@ export function CodeMirrorEditor({
   const onViewReadyRef = React.useRef(onViewReady);
   const onViewDestroyRef = React.useRef(onViewDestroy);
   const onSearchOpenChangeRef = React.useRef(onSearchOpenChange);
+  const onViewUpdateRef = React.useRef(onViewUpdate);
   const blockWidgetsRef = React.useRef(blockWidgets);
   
   // Scoped map for widget containers to avoid global collisions and memory leaks
@@ -342,6 +363,25 @@ export function CodeMirrorEditor({
   }, [onSearchOpenChange]);
 
   React.useEffect(() => {
+    onViewUpdateRef.current = onViewUpdate;
+  }, [onViewUpdate]);
+
+  // Build theme + language extensions from props (avoids need for consumers to import @codemirror/*)
+  const autoExtensions = React.useMemo(() => {
+    const result: Extension[] = [];
+    if (theme) {
+      result.push(createFlexokiCodeMirrorTheme(theme));
+    }
+    if (filePath) {
+      const lang = languageByExtension(filePath);
+      if (lang) {
+        result.push(lang);
+      }
+    }
+    return result;
+  }, [theme, filePath]);
+
+  React.useEffect(() => {
     blockWidgetsRef.current = blockWidgets;
     syncPortalWidgets(blockWidgets);
   }, [blockWidgets, syncPortalWidgets]);
@@ -370,6 +410,7 @@ export function CodeMirrorEditor({
         keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
         EditorView.updateListener.of((update) => {
           syncEditorCssVars(update.view);
+          onViewUpdateRef.current?.(update);
           if (update.viewportChanged || update.geometryChanged) {
             syncPortalWidgets(blockWidgetsRef.current);
           }
@@ -393,6 +434,8 @@ export function CodeMirrorEditor({
         }),
         editableCompartment.of(EditorView.editable.of(!readOnly)),
         externalExtensionsCompartment.of(extensions ?? []),
+        autoExtensionsCompartment.of(autoExtensions),
+        lineWrappingCompartment.of(lineWrapping ? EditorView.lineWrapping : []),
         highlightLinesCompartment.of(createHighlightLinesExtension(highlightLines)),
         blockWidgetsCompartment.of(createBlockWidgetsExtension(blockWidgets, widgetContainersRef.current)),
         searchCompartment.of(enableSearch ? [search({ top: true }), keymap.of(toViewKeyBindings(searchKeymap))] : []),
@@ -435,6 +478,8 @@ export function CodeMirrorEditor({
         lineNumbersCompartment.reconfigure(lineNumbers(lineNumbersConfig)),
         editableCompartment.reconfigure(EditorView.editable.of(!readOnly)),
         externalExtensionsCompartment.reconfigure(extensions ?? []),
+        autoExtensionsCompartment.reconfigure(autoExtensions),
+        lineWrappingCompartment.reconfigure(lineWrapping ? EditorView.lineWrapping : []),
         highlightLinesCompartment.reconfigure(createHighlightLinesExtension(highlightLines)),
         blockWidgetsCompartment.reconfigure(createBlockWidgetsExtension(blockWidgets, widgetContainersRef.current)),
         searchCompartment.reconfigure(enableSearch ? [search({ top: true }), keymap.of(toViewKeyBindings(searchKeymap))] : []),
@@ -447,7 +492,7 @@ export function CodeMirrorEditor({
       syncEditorCssVars(view);
       syncPortalWidgets(blockWidgetsRef.current);
     });
-  }, [extensions, highlightLines, lineNumbersConfig, readOnly, blockWidgets, enableSearch, syncEditorCssVars, syncPortalWidgets]);
+  }, [extensions, highlightLines, lineNumbersConfig, readOnly, blockWidgets, enableSearch, lineWrapping, autoExtensions, syncEditorCssVars, syncPortalWidgets]);
 
   React.useEffect(() => {
     const view = viewRef.current;
@@ -483,6 +528,28 @@ export function CodeMirrorEditor({
     }
   }, [value, syncEditorCssVars]);
 
+  React.useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !scrollToPosition) {
+      return;
+    }
+    const line = Math.max(1, scrollToPosition.line);
+    if (line > view.state.doc.lines) {
+      return;
+    }
+    const targetLine = view.state.doc.line(line);
+    const column = scrollToPosition.column ?? 1;
+    const lineLength = Math.max(0, targetLine.to - targetLine.from);
+    const clampedColumnOffset = Math.min(lineLength, column - 1);
+    const targetPos = targetLine.from + clampedColumnOffset;
+
+    view.dispatch({
+      selection: { anchor: targetPos },
+      effects: EditorView.scrollIntoView(targetPos, { y: 'center' }),
+    });
+    view.focus();
+  }, [scrollToPosition]);
+
   return (
     <>
       <div
@@ -501,3 +568,5 @@ export function CodeMirrorEditor({
     </>
   );
 }
+
+export default CodeMirrorEditor;
