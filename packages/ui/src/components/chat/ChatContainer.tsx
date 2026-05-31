@@ -15,6 +15,7 @@ import { useChatAutoFollow, type AnimationHandlers, type ContentChangeReason } f
 import { useChatTimelineController } from './hooks/useChatTimelineController';
 import { TimelineDialog } from './TimelineDialog';
 import { useChatTurnNavigation } from './hooks/useChatTurnNavigation';
+import { ChatScrollMarkers } from './ChatScrollMarkers';
 import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
@@ -255,6 +256,11 @@ const ChatViewport = React.memo(({
                     </div>
                 </ScrollShadow>
                 <OverlayScrollbar containerRef={scrollRef} suppressVisibility={isProgrammaticFollowActive} userIntentOnly observeMutations={false} />
+                <ChatScrollMarkers
+                  messages={renderedMessages}
+                  messageListRef={messageListRef}
+                  scrollContainerRef={scrollRef}
+                />
             </div>
         </div>
     );
