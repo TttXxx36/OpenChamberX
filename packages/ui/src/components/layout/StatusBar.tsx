@@ -112,15 +112,41 @@ export const StatusBar: React.FC = () => {
         )}
 
         {tokenUsage && tokenUsage.totalTokens > 0 && (
-          <span
-            className="flex items-center gap-1"
-            title={`${tokenUsage.totalTokens.toLocaleString()} tokens used`}
-          >
-            <span className="tabular-nums">
-              {tokenUsage.totalTokens.toLocaleString()}
+          <>
+            <span className="text-[10px] text-muted-foreground/40">·</span>
+
+            {/* Token usage: current / limit (percentage%) */}
+            <span
+              className="flex items-center gap-1"
+              title={`${tokenUsage.totalTokens.toLocaleString()} / ${tokenUsage.contextLimit.toLocaleString()} tokens (${tokenUsage.percentage}%)`}
+            >
+              <span className="text-[10px]">tokens:</span>
+              <span className="tabular-nums">
+                {tokenUsage.totalTokens.toLocaleString()}
+              </span>
+              <span className="text-[10px]">/</span>
+              <span className="tabular-nums">
+                {tokenUsage.contextLimit.toLocaleString()}
+              </span>
+              <span className="text-[10px]">
+                ({tokenUsage.percentage}%)
+              </span>
             </span>
-            <span className="text-[10px]">tokens</span>
-          </span>
+
+            {/* Cache percentage (if cache data is available) */}
+            {tokenUsage.cacheRead != null && tokenUsage.cacheRead > 0 && (
+              <>
+                <span className="text-[10px] text-muted-foreground/40">·</span>
+                <span className="flex items-center gap-1 tabular-nums">
+                  cache:{' '}
+                  {Math.round(
+                    (tokenUsage.cacheRead / tokenUsage.totalTokens) * 100,
+                  )}
+                  %
+                </span>
+              </>
+            )}
+          </>
         )}
 
         {/* Connection indicator */}

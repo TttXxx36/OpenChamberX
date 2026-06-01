@@ -621,6 +621,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       normalizedOutput,
       thresholdLimit,
       lastMessageId,
+      cacheRead: lastTokens.cache?.read,
+      cacheWrite: lastTokens.cache?.write,
     }
   },
 

@@ -1,18 +1,26 @@
 import React from 'react';
-import type { Message } from '@opencode-ai/sdk/v2';
+import type { Message, Part } from '@opencode-ai/sdk/v2';
 
 import type { MessageListHandle } from './MessageList';
 import { deriveMessageRole } from './message/messageRole';
 import { cn } from '@/lib/utils';
 
 interface ChatScrollMarkersProps {
-  messages: Array<{ info: Message; parts: unknown[] }>;
+  messages: Array<{ info: Message; parts: Part[] }>;
   messageListRef: React.RefObject<MessageListHandle | null>;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
 }
 
-const MARKER_HEIGHT_PX = 2;
-const MARKER_GAP_MIN_PX = 4;
+function getMessagePreview(msg: { info: Message; parts: Part[] }): string {
+  for (const part of msg.parts) {
+    if (part.type === 'text') {
+      const text = (part as Extract<Part, { type: 'text' }>).text ?? '';
+      const trimmed = text.slice(0, 50).trim();
+      return trimmed.length < text.trim().length ? `${trimmed}...` : trimmed;
+    }
+  }
+  return '\uD83D\uDCCE Attachment';
+}
 
 export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
   messages,
@@ -20,42 +28,18 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
   scrollContainerRef,
 }) => {
   const [activeMessageId, setActiveMessageId] = React.useState<string | null>(null);
-  const [markerPositions, setMarkerPositions] = React.useState<Map<string, number>>(new Map());
 
   const userMessages = React.useMemo(() => {
     return messages.filter((m) => deriveMessageRole(m.info).isUser);
   }, [messages]);
 
-  const recalcPositions = React.useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container || userMessages.length === 0) {
-      setMarkerPositions(new Map());
-      return;
+  const previews = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const msg of userMessages) {
+      map.set(String(msg.info.id), getMessagePreview(msg));
     }
-
-    const { scrollHeight, clientHeight } = container;
-    const trackHeight = clientHeight;
-    const positions = new Map<string, number>();
-
-    userMessages.forEach((msg, i) => {
-      const el = container.querySelector(`[data-message-id="${msg.info.id}"]`);
-      if (el) {
-        const elOffsetTop = (el as HTMLElement).offsetTop;
-        const ratio = scrollHeight > 0 ? elOffsetTop / scrollHeight : 0;
-        const top = Math.max(0, Math.min(1, ratio)) * (trackHeight - MARKER_HEIGHT_PX);
-        const clamped = Math.max(
-          i * MARKER_HEIGHT_PX + i * MARKER_GAP_MIN_PX,
-          Math.min(
-            top,
-            trackHeight - MARKER_HEIGHT_PX - (userMessages.length - 1 - i) * (MARKER_HEIGHT_PX + MARKER_GAP_MIN_PX),
-          ),
-        );
-        positions.set(String(msg.info.id), clamped);
-      }
-    });
-
-    setMarkerPositions(positions);
-  }, [userMessages, scrollContainerRef]);
+    return map;
+  }, [userMessages]);
 
   React.useEffect(() => {
     const container = scrollContainerRef.current;
@@ -90,15 +74,11 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
 
     const handleScrollOrResize = () => {
       cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        recalcPositions();
-        updateActiveMarker();
-      });
+      rafId = requestAnimationFrame(updateActiveMarker);
     };
 
     container.addEventListener('scroll', handleScrollOrResize, { passive: true });
     window.addEventListener('resize', handleScrollOrResize);
-    recalcPositions();
     updateActiveMarker();
 
     const observer = new ResizeObserver(handleScrollOrResize);
@@ -110,34 +90,31 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
       window.removeEventListener('resize', handleScrollOrResize);
       observer.disconnect();
     };
-  }, [userMessages, scrollContainerRef, recalcPositions]);
+  }, [userMessages, scrollContainerRef]);
 
   if (userMessages.length === 0) return null;
 
   return (
     <div
-      className="absolute right-0 top-0 bottom-0 z-10 w-[14px] opacity-40 hover:opacity-100 transition-opacity duration-200"
+      className="absolute right-0 inset-y-0 z-10 w-[14px] flex flex-col items-center justify-center gap-[3px] opacity-40 hover:opacity-100 transition-opacity duration-200 py-1"
     >
       {userMessages.map((msg) => {
         const messageId = String(msg.info.id);
         const isActive = activeMessageId === messageId;
-        const top = markerPositions.get(messageId);
-
-        if (top === undefined) return null;
 
         return (
           <button
             key={messageId}
             type="button"
             data-user-message-marker={messageId}
+            title={previews.get(messageId) ?? ''}
             className={cn(
-              'absolute left-1 right-1 h-[2px] rounded-[1px] cursor-pointer border-none p-0 m-0',
-              'transition-all duration-150',
+              'w-[8px] mx-auto h-[3px] rounded-full cursor-pointer border-none p-0 m-0',
+              'transition-all duration-150 shrink-0',
               isActive
-                ? 'bg-[var(--primary)] h-[3px] opacity-90'
-                : 'bg-[var(--muted-foreground)] opacity-40 hover:opacity-80 hover:h-[3px]',
+                ? 'bg-[var(--primary)] h-[5px] opacity-100 shadow-sm'
+                : 'bg-[var(--muted-foreground)] opacity-60 hover:opacity-80 hover:h-[5px]',
             )}
-            style={{ top: `${top}px` }}
             onClick={() => messageListRef.current?.scrollToMessageId(messageId, { behavior: 'smooth' })}
             aria-label={`Go to message ${messageId}`}
           />

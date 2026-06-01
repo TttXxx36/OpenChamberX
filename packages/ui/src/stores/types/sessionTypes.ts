@@ -70,6 +70,8 @@ export interface SessionContextUsage {
     normalizedOutput?: number;
     thresholdLimit: number;
     lastMessageId?: string;
+    cacheRead?: number;
+    cacheWrite?: number;
 }
 
 // Default message limit (can be overridden via settings).
