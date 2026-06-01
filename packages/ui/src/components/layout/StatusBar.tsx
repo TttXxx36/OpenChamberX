@@ -111,7 +111,7 @@ export const StatusBar: React.FC = () => {
           </button>
         )}
 
-        {tokenUsage && tokenUsage.totalTokens > 0 && (
+        {tokenUsage != null && (
           <>
             <span className="text-[10px] text-muted-foreground/40">·</span>
 
@@ -134,7 +134,7 @@ export const StatusBar: React.FC = () => {
             </span>
 
             {/* Cache percentage (if cache data is available) */}
-            {tokenUsage.cacheRead != null && tokenUsage.cacheRead > 0 && (
+            {tokenUsage.cacheRead != null && tokenUsage.cacheRead > 0 && tokenUsage.totalTokens > 0 && (
               <>
                 <span className="text-[10px] text-muted-foreground/40">·</span>
                 <span className="flex items-center gap-1 tabular-nums">
