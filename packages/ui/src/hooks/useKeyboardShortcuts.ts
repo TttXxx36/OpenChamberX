@@ -27,6 +27,7 @@ export const useKeyboardShortcuts = () => {
   const setRightSidebarOpen = useUIStore((s) => s.setRightSidebarOpen);
   const setRightSidebarTab = useUIStore((s) => s.setRightSidebarTab);
   const toggleBottomTerminal = useUIStore((s) => s.toggleBottomTerminal);
+  const toggleStatusBar = useUIStore((s) => s.toggleStatusBar);
   const setBottomTerminalExpanded = useUIStore((s) => s.setBottomTerminalExpanded);
   const isMobile = useUIStore((s) => s.isMobile);
   const setSessionSwitcherOpen = useUIStore((s) => s.setSessionSwitcherOpen);
@@ -93,6 +94,13 @@ export const useKeyboardShortcuts = () => {
         e.preventDefault();
         e.stopPropagation();
         setBottomTerminalExpanded(!isBottomTerminalExpanded);
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('toggle_status_bar'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleStatusBar();
         return;
       }
     };
@@ -546,6 +554,7 @@ export const useKeyboardShortcuts = () => {
     setRightSidebarOpen,
     setRightSidebarTab,
     toggleBottomTerminal,
+    toggleStatusBar,
     setBottomTerminalExpanded,
     isMobile,
     setSessionSwitcherOpen,

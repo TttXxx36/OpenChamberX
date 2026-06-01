@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Icon } from '@/components/icon/Icon';
 import { useUIStore } from '@/stores/useUIStore';
 import type { LayoutPreset } from '@/stores/useUIStore';
@@ -18,6 +19,8 @@ export const LayoutPage: React.FC = () => {
   const saveCurrentLayoutPreset = useUIStore((state) => state.saveCurrentLayoutPreset);
   const loadLayoutPreset = useUIStore((state) => state.loadLayoutPreset);
   const deleteLayoutPreset = useUIStore((state) => state.deleteLayoutPreset);
+  const isStatusBarVisible = useUIStore((state) => state.isStatusBarVisible);
+  const setStatusBarVisible = useUIStore((state) => state.setStatusBarVisible);
   const [inputName, setInputName] = React.useState('');
 
   const handleSave = React.useCallback(() => {
@@ -48,6 +51,18 @@ export const LayoutPage: React.FC = () => {
           保存和恢复面板布局配置。
         </p>
       </div>
+
+      {/* Status bar visibility toggle */}
+      <section className="px-2 pb-4">
+        <div className="flex items-center justify-between rounded-md border border-border bg-[var(--surface-elevated)] px-3 py-2">
+          <span className="typography-ui-label text-foreground">显示状态栏</span>
+          <Switch
+            checked={isStatusBarVisible}
+            onCheckedChange={setStatusBarVisible}
+            aria-label="切换状态栏可见性"
+          />
+        </div>
+      </section>
 
       {/* Save current layout */}
       <section className="px-2 pb-4 pt-2">

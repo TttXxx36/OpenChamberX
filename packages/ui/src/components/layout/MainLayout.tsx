@@ -51,6 +51,7 @@ export const MainLayout: React.FC = () => {
     const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
     const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
     const isBottomTerminalOpen = useUIStore((state) => state.isBottomTerminalOpen);
+    const isStatusBarVisible = useUIStore((state) => state.isStatusBarVisible);
     const setRightSidebarOpen = useUIStore((state) => state.setRightSidebarOpen);
     const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen);
     const activeMainTab = useUIStore((state) => state.activeMainTab);
@@ -540,7 +541,7 @@ export const MainLayout: React.FC = () => {
                                 </motion.div>
                             )}
                         </main>
-                        <StatusBar />
+                        {isStatusBarVisible && <StatusBar />}
                     </div>
 
                     {/* Mobile settings: full screen */}
@@ -658,7 +659,7 @@ export const MainLayout: React.FC = () => {
                                         <React.Suspense fallback={null}><ContextPanel /></React.Suspense>
                                     </div>
                                 </div>
-                                <StatusBar />
+                                {isStatusBarVisible && <StatusBar />}
                                 <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
                                     {isBottomTerminalOpen ? (
                                         <ErrorBoundary>

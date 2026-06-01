@@ -173,6 +173,13 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
     customizable: true,
   },
   {
+    id: 'toggle_status_bar',
+    defaultCombo: 'mod+shift+k',
+    label: 'Toggle status bar',
+    description: 'Toggle the status bar visibility',
+    customizable: true,
+  },
+  {
     id: 'toggle_right_sidebar',
     defaultCombo: 'mod+b',
     label: 'Toggle right sidebar',

@@ -620,6 +620,7 @@ export interface UIStore {
   userMessageRenderingMode: UserMessageRenderingMode;
   stickyUserHeader: boolean;
   showSplitAssistantMessageActions: boolean;
+  isStatusBarVisible: boolean;
   showMobileSessionStatusBar: boolean;
   isMobileSessionStatusBarCollapsed: boolean;
   isExpandedInput: boolean;
@@ -754,6 +755,8 @@ export interface UIStore {
   setUserMessageRenderingMode: (value: UserMessageRenderingMode) => void;
   setStickyUserHeader: (value: boolean) => void;
   setShowSplitAssistantMessageActions: (value: boolean) => void;
+  setStatusBarVisible: (visible: boolean) => void;
+  toggleStatusBar: () => void;
   setShowMobileSessionStatusBar: (value: boolean) => void;
   setIsMobileSessionStatusBarCollapsed: (value: boolean) => void;
   viewPagerPage: 'left' | 'center' | 'right';
@@ -888,6 +891,7 @@ export const useUIStore = create<UIStore>()(
         userMessageRenderingMode: 'markdown',
         stickyUserHeader: true,
         showSplitAssistantMessageActions: false,
+        isStatusBarVisible: true,
         showMobileSessionStatusBar: true,
         isMobileSessionStatusBarCollapsed: false,
         isExpandedInput: false,
@@ -1997,6 +2001,12 @@ export const useUIStore = create<UIStore>()(
         setShowSplitAssistantMessageActions: (value) => {
           set({ showSplitAssistantMessageActions: value });
         },
+        setStatusBarVisible: (visible) => {
+          set({ isStatusBarVisible: visible });
+        },
+        toggleStatusBar: () => {
+          set((state) => ({ isStatusBarVisible: !state.isStatusBarVisible }));
+        },
         setShowMobileSessionStatusBar: (value) => {
           set({ showMobileSessionStatusBar: value });
         },
@@ -2322,6 +2332,7 @@ export const useUIStore = create<UIStore>()(
           userMessageRenderingMode: state.userMessageRenderingMode,
           stickyUserHeader: state.stickyUserHeader,
           showSplitAssistantMessageActions: state.showSplitAssistantMessageActions,
+          isStatusBarVisible: state.isStatusBarVisible,
           showMobileSessionStatusBar: state.showMobileSessionStatusBar,
           isMobileSessionStatusBarCollapsed: state.isMobileSessionStatusBarCollapsed,
           shortcutOverrides: state.shortcutOverrides,
