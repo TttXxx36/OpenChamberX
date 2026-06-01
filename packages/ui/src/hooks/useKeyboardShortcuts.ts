@@ -96,13 +96,6 @@ export const useKeyboardShortcuts = () => {
         setBottomTerminalExpanded(!isBottomTerminalExpanded);
         return;
       }
-
-      if (eventMatchesShortcut(e, combo('toggle_status_bar'))) {
-        e.preventDefault();
-        e.stopPropagation();
-        toggleStatusBar();
-        return;
-      }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -192,6 +185,13 @@ export const useKeyboardShortcuts = () => {
         e.preventDefault();
         const { isSettingsDialogOpen } = useUIStore.getState();
         setSettingsDialogOpen(!isSettingsDialogOpen);
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('toggle_status_bar'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleStatusBar();
         return;
       }
 

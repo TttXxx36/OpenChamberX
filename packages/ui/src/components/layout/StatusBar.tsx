@@ -37,6 +37,7 @@ export const StatusBar: React.FC = () => {
 
   /* ── Token usage (basic count from the current session) ─── */
   const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const tokenUsage: SessionContextUsage | null = React.useMemo(() => {
     const limit =
       currentModel &&
@@ -49,19 +50,15 @@ export const StatusBar: React.FC = () => {
     const outputLimit =
       limit && typeof limit.output === 'number' ? limit.output : 0;
     return getContextUsage(contextLimit, outputLimit);
-  }, [currentModel, getContextUsage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentSessionId triggers recalculation when session changes
+  }, [currentModel, getContextUsage, currentSessionId]);
 
   /* ── Actions ────────────────────────────────────────────── */
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
-  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
 
   const handleGitClick = React.useCallback(() => {
     setActiveMainTab('git');
   }, [setActiveMainTab]);
-
-  const handleModelClick = React.useCallback(() => {
-    setSettingsDialogOpen(true);
-  }, [setSettingsDialogOpen]);
 
   return (
     <div
@@ -98,17 +95,13 @@ export const StatusBar: React.FC = () => {
       {/* ── Right section ────────────────────────────────────── */}
       <div className="flex items-center gap-3 min-w-0">
         {modelName && (
-          <button
-            onClick={handleModelClick}
-            className={
-              'flex items-center gap-1 hover:text-foreground ' +
-              'transition-colors focus-visible:outline-none'
-            }
+          <span
+            className="flex items-center gap-1"
             title={`Model: ${modelName}`}
           >
             <Icon name="brain" className="h-3.5 w-3.5" />
             <span>{modelName}</span>
-          </button>
+          </span>
         )}
 
         {tokenUsage != null && (
