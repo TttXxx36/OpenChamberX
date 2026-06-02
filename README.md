@@ -376,6 +376,30 @@ Active development. Here's what's being worked on or planned:
 - Linear integration
 - Built-in browser for running dev apps with agent integration
 
+## Recent Changes
+
+### v1.11.8 — Session Rename Fix & Performance
+
+**Bug Fixes:**
+
+- **Session rename now works reliably** — the rename feature in the sidebar previously failed silently due to three root causes:
+  - SDK errors were silently swallowed by `updateSessionTitle`, causing the edit mode to close as if the rename succeeded
+  - Directory resolution could fall back to the wrong directory for sessions in non-current worktrees
+  - Empty title submissions closed the edit mode with no user feedback
+- `shareSession` and `unshareSession` now properly throw on SDK errors instead of silently returning `null`
+
+**Performance:**
+
+- Eliminated O(n) array clone on the `message.part.delta` hot path (~60 events/sec during streaming), reducing GC pressure
+- `message.part.updated` handler now only clones the parts array when structural mutations (splice) are needed
+- Session status updates use targeted `Object.assign` instead of spreading the entire status map
+
+**Code Quality:**
+
+- Extracted `formatSdkError` helper to deduplicate SDK error handling across mutation actions
+- Replaced magic numbers with named constants (`DEFAULT_ABORT_PROMPT_DURATION_MS`, `DEFAULT_CONTEXT_THRESHOLD_TOKENS`, `TEXT_PREVIEW_LENGTH`)
+- Added i18n keys for rename error/empty-title feedback in 7 languages
+
 ## Acknowledgments
 
 Independent project, not affiliated with the OpenCode team.
