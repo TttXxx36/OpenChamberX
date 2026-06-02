@@ -2,6 +2,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { describe, expect, it } from 'vitest';
 
+const isPosix = path.delimiter === ':';
+
 import { pathLooksUserConfigured, mergePathValues } from './path-utils.js';
 
 const home = os.homedir();
@@ -25,7 +27,8 @@ describe('pathLooksUserConfigured', () => {
   });
 
   it('detects home directory itself', () => {
-    expect(pathLooksUserConfigured(`${home}:/usr/bin`, home, delim)).toBe(true);
+    if (!isPosix) return; // POSIX-only: `:` is PATH separator, not drive letter
+    expect(pathLooksUserConfigured(`${home}:/usr/bin`, home, ':')).toBe(true);
   });
 
   it('detects well-known package manager prefixes', () => {
@@ -62,10 +65,10 @@ describe('mergePathValues', () => {
   });
 
   it('deduplicates segments, preserving primary order', () => {
-    expect(mergePathValues('/a:/b:/c', '/b:/d:/a', delim)).toBe('/a:/b:/c:/d');
+    expect(mergePathValues('/a:/b:/c', '/b:/d:/a', ':')).toBe('/a:/b:/c:/d');
   });
 
   it('appends all fallback segments when no overlap', () => {
-    expect(mergePathValues('/a:/b', '/c:/d', delim)).toBe('/a:/b:/c:/d');
+    expect(mergePathValues('/a:/b', '/c:/d', ':')).toBe('/a:/b:/c:/d');
   });
 });

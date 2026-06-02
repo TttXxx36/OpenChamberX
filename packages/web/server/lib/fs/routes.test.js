@@ -90,7 +90,10 @@ const registerExec = ({ spawn }) => {
   registerFsRoutes(app, {
     os: { homedir: () => '/home/user' },
     path,
-    fsPromises: { stat: async () => ({ isDirectory: () => true }) },
+    fsPromises: {
+      stat: async () => ({ isDirectory: () => true }),
+      realpath: async (p) => p,
+    },
     spawn,
     crypto: { randomUUID: (() => { let n = 0; return () => `job-${n++}`; })() },
     normalizeDirectoryPath: (p) => p,

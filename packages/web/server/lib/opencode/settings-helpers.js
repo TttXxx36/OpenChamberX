@@ -323,15 +323,21 @@ export const createSettingsHelpers = (dependencies) => {
       result.gitModelId = trimmed.length > 0 ? trimmed : undefined;
     }
     if (typeof candidate.pwaAppName === 'string') {
-      result.pwaAppName = normalizePwaAppName(candidate.pwaAppName, undefined);
+      const normalized = candidate.pwaAppName.trim();
+      if (normalized.length > 0) {
+        result.pwaAppName = normalized;
+      }
     }
     if (typeof candidate.pwaOrientation === 'string') {
-      result.pwaOrientation = normalizePwaOrientation(candidate.pwaOrientation, undefined);
+      const normalized = candidate.pwaOrientation.trim();
+      if (PWA_ORIENTATION_VALUES.has(normalized)) {
+        result.pwaOrientation = normalized;
+      }
     }
     if (typeof candidate.mobileKeyboardMode === 'string') {
-      const mode = normalizeMobileKeyboardMode(candidate.mobileKeyboardMode, undefined);
-      if (mode) {
-        result.mobileKeyboardMode = mode;
+      const normalized = candidate.mobileKeyboardMode.trim();
+      if (MOBILE_KEYBOARD_MODE_VALUES.has(normalized)) {
+        result.mobileKeyboardMode = normalized;
       }
     }
     if (typeof candidate.toolCallExpansion === 'string') {

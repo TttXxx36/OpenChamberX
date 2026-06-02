@@ -21,6 +21,41 @@ const isDev = process.env.OPENCHAMBER_ELECTRON_DEV === '1' || !app.isPackaged;
 const DEEP_LINK_PROTOCOL = 'openchamber';
 const APP_USER_MODEL_ID = 'dev.openchamber.desktop';
 
+const formatFatalError = (error) => {
+  const message = error?.message || String(error);
+  const stack = error?.stack || '';
+  return {
+    title: 'OpenChamber 遇到意外错误',
+    detail: [
+      message,
+      '',
+      stack ? stack.split('\n').slice(0, 6).join('\n') : '',
+      '',
+      '请将以上信息报告给开发团队。应用即将关闭。',
+    ].filter(Boolean).join('\n'),
+  };
+};
+
+// Global exception safety net: log and show dialog before exit,
+// so users can report the error and we can diagnose from logs.
+process.on('uncaughtException', (error) => {
+  try {
+    console.error('[electron] uncaught exception:', error);
+    const { title, detail } = formatFatalError(error);
+    dialog.showErrorBox(title, detail);
+  } finally {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason) => {
+  try {
+    console.warn('[electron] unhandled rejection:', reason);
+  } catch {
+    // swallow — don't crash inside the crash handler
+  }
+});
+
 if (!app.requestSingleInstanceLock()) {
   app.exit(0);
   process.exit(0);
@@ -2692,5 +2727,11 @@ app.whenReady().then(async () => {
   });
 }).catch((error) => {
   log.error('[electron] startup failed:', error);
+  try {
+    const { title, detail } = formatFatalError(error);
+    dialog.showErrorBox(title, detail);
+  } catch {
+    // dialog may not be ready at this point
+  }
   app.exit(1);
 });

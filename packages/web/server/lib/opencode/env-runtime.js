@@ -969,33 +969,45 @@ export const createOpenCodeEnvRuntime = (deps) => {
 
       if (explicitWslPath && explicitWslPath[1] && explicitWslPath[1].trim().length > 0) {
         const probe = probeWslForOpencode();
-        const applied = applyWslOpencodeResolution({
-          wslBinary: probe?.wslBinary || resolveWslExecutablePath(),
-          opencodePath: explicitWslPath[1].trim(),
-          source: 'settings-wsl-path',
-          distro: probe?.distro || ENV_CONFIGURED_OPENCODE_WSL_DISTRO,
-        });
-        if (applied) {
-          return applied;
-        }
-        if (strict) {
-          throw createConfiguredWslOpencodeError(raw);
+        if (!probe) {
+          if (strict) {
+            throw createConfiguredWslOpencodeError(raw);
+          }
+        } else {
+          const applied = applyWslOpencodeResolution({
+            wslBinary: probe.wslBinary,
+            opencodePath: explicitWslPath[1].trim(),
+            source: 'settings-wsl-path',
+            distro: probe.distro || ENV_CONFIGURED_OPENCODE_WSL_DISTRO,
+          });
+          if (applied) {
+            return applied;
+          }
+          if (strict) {
+            throw createConfiguredWslOpencodeError(raw);
+          }
         }
       }
 
       if (process.platform === 'win32' && (isWslExecutableValue(raw) || isWslExecutableValue(normalized || ''))) {
         const probe = probeWslForOpencode();
-        const applied = applyWslOpencodeResolution({
-          wslBinary: probe?.wslBinary || normalized || raw || null,
-          opencodePath: probe?.opencodePath || 'opencode',
-          source: 'settings-wsl',
-          distro: probe?.distro || ENV_CONFIGURED_OPENCODE_WSL_DISTRO,
-        });
-        if (applied) {
-          return applied;
-        }
-        if (strict) {
-          throw createConfiguredWslOpencodeError(raw);
+        if (!probe) {
+          if (strict) {
+            throw createConfiguredWslOpencodeError(raw);
+          }
+        } else {
+          const applied = applyWslOpencodeResolution({
+            wslBinary: probe.wslBinary,
+            opencodePath: probe.opencodePath || 'opencode',
+            source: 'settings-wsl',
+            distro: probe.distro || ENV_CONFIGURED_OPENCODE_WSL_DISTRO,
+          });
+          if (applied) {
+            return applied;
+          }
+          if (strict) {
+            throw createConfiguredWslOpencodeError(raw);
+          }
         }
       }
 

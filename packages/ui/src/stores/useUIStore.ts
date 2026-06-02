@@ -502,6 +502,14 @@ const clampContextPanelRoots = (
   return next;
 };
 
+/**
+ * @deprecated 巨型 store，所有新字段请分配到专用 stores 中。
+ * 如需添加 UI 相关状态，请：
+ * - 通知设置 → useNotificationStore
+ * - 模型偏好 → useModelPrefsStore
+ * - 布局状态 → 新建 useUILayoutStore
+ * 不再向此 store 追加字段。
+ */
 export interface UIStore {
 
   theme: 'light' | 'dark' | 'system';

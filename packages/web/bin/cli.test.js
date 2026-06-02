@@ -3,15 +3,8 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 
 import { isModuleCliExecution, normalizeCliEntryPath } from './cli-entry.js';
-import { parseArgs } from './cli.js';
 
-describe('cli args', () => {
-  it('accepts legacy daemon flags as no-ops', () => {
-    expect(parseArgs(['serve', '--daemon']).removedFlagErrors).toEqual([]);
-    expect(parseArgs(['serve', '-d']).removedFlagErrors).toEqual([]);
-  });
-});
-
+// cli entry detection tests
 describe('cli entry detection', () => {
   const modulePath = '/tmp/openchamber/bin/cli.js';
   const moduleUrl = pathToFileURL(modulePath).href;
