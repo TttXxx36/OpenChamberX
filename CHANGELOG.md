@@ -4,7 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Desktop/Windows: added Windows desktop builds (NSIS installer + portable, x64). First Windows release ships unsigned, so users will see a SmartScreen warning on first launch — click "More info" → "Run anyway". The terminal automatically uses `node-pty` on Windows; `bun-pty` falls back when it can't load.
+
+## [1.11.8] - 2026-06-02
+
+### Performance
+- Store: marked `useUIStore` as `@deprecated` with migration guide; new `useNotificationStore` for notification settings
+- Tests: fixed 14 pre-existing test failures (bun→vitest migration remnants, Windows path delimiter, default parameter pitfalls). Test pass rate: 249/249
+
+### Reliability
+- Electron: added `process.on('uncaughtException')` global safety net with error dialog and `process.on('unhandledRejection')` logging
+- Electron: startup failure now shows an error dialog instead of silent exit
+- WSL: fixed probe-failure bypass — strict mode now correctly throws when WSL is unavailable
+- Settings: fixed `sanitizeSettingsUpdate` default parameter trap where `undefined` silently resolved to `'native'` for invalid `mobileKeyboardMode` values
 
 ## [1.11.7] - 2026-05-26
 
