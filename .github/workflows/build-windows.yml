@@ -2,11 +2,21 @@ name: Build Windows Installer
 
 on:
   push:
-    branches: [main, feat/linux-desktop]
+    branches: [main]
     tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release after build'
+        required: false
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -70,19 +80,41 @@ jobs:
           if-no-files-found: ignore
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
 
     steps:
+      - name: Checkout for tag generation
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version tag
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            BASE=$(node -p "require('./package.json').version")
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            TIMESTAMP=$(date +'%Y%m%d%H%M')
+            TAG="v${BASE}-build.${TIMESTAMP}"
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: OpenChamberX ${{ steps.version.outputs.tag }}
           files: |
             OpenChamberX-Installer/*.exe
             OpenChamberX-Portable/*.exe
