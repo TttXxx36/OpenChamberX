@@ -261,6 +261,8 @@ export const dict: Record<I18nKey, string> = {
   "sessions.sidebar.session.menu.rename": "Перейменувати",
   "sessions.sidebar.session.rename.save": "Зберегти назву сесії",
   "sessions.sidebar.session.rename.cancel": "Скасувати перейменування сесії",
+  "sessions.sidebar.session.rename.emptyTitle": "Назва сесії не може бути порожньою",
+  "sessions.sidebar.session.rename.error": "Не вдалося перейменувати сесію",
   "sessions.sidebar.session.menu.unpin": "Відкріпити сесія",
   "sessions.sidebar.session.menu.pin": "Закріпити сесія",
   "sessions.sidebar.session.menu.share": "Поділитися",

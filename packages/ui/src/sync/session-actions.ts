@@ -22,6 +22,13 @@ const MESSAGE_REFETCH_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"
 const UNREVERT_REFETCH_ATTEMPTS = 3
 const UNREVERT_REFETCH_RETRY_MS = 150
 
+function formatSdkError(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message: string }).message)
+  }
+  return 'Unknown error'
+}
+
 // Reference set by SyncProvider — allows actions to access SDK and stores
 let _sdk: OpencodeClient | null = null
 let _childStores: ChildStoreManager | null = null
@@ -323,7 +330,13 @@ export async function archiveSession(sessionId: string): Promise<boolean> {
 
 export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
   const sessionDirectory = getSessionDirectory(sessionId)
+  if (!sessionDirectory) {
+    throw new Error('Cannot determine directory for session rename')
+  }
   const result = await sdk().session.update({ sessionID: sessionId, directory: sessionDirectory, title })
+  if (result.error) {
+    throw new Error(formatSdkError(result.error))
+  }
   if (result.data) {
     useGlobalSessionsStore.getState().upsertSession(result.data)
   }
@@ -332,6 +345,9 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
 export async function shareSession(sessionId: string): Promise<Session | null> {
   const sessionDirectory = getSessionDirectory(sessionId)
   const result = await sdk().session.share({ sessionID: sessionId, directory: sessionDirectory })
+  if (result.error) {
+    throw new Error(formatSdkError(result.error))
+  }
   if (result.data) {
     useGlobalSessionsStore.getState().upsertSession(result.data)
   }
@@ -341,6 +357,9 @@ export async function shareSession(sessionId: string): Promise<Session | null> {
 export async function unshareSession(sessionId: string): Promise<Session | null> {
   const sessionDirectory = getSessionDirectory(sessionId)
   const result = await sdk().session.unshare({ sessionID: sessionId, directory: sessionDirectory })
+  if (result.error) {
+    throw new Error(formatSdkError(result.error))
+  }
   if (result.data) {
     useGlobalSessionsStore.getState().upsertSession(result.data)
   }
@@ -441,14 +460,10 @@ export async function optimisticSend(input: {
     parts: optimisticParts,
   })
 
-  // Set busy status
-  const current = store.getState()
-  store.setState({
-    session_status: {
-      ...current.session_status,
-      [input.sessionId]: { type: "busy" as const },
-    },
-  })
+  // Set busy status — only update the changed key to avoid fanout
+  store.setState((current) => ({
+    session_status: Object.assign({}, current.session_status, { [input.sessionId]: { type: "busy" as const } }),
+  }))
 
   try {
     await input.send(messageID)
@@ -458,13 +473,9 @@ export async function optimisticSend(input: {
       sessionID: input.sessionId,
       messageID,
     })
-    const s = store.getState()
-    store.setState({
-      session_status: {
-        ...s.session_status,
-        [input.sessionId]: { type: "idle" as const },
-      },
-    })
+  store.setState((current) => ({
+    session_status: Object.assign({}, current.session_status, { [input.sessionId]: { type: "idle" as const } }),
+  }))
     throw error
   }
 }

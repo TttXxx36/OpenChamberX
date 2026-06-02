@@ -311,44 +311,47 @@ export function applyDirectoryEvent(
       const messageID = (part as { messageID: string }).messageID
       const sessionID = (part as { sessionID?: string }).sessionID
       const missingOwningMessage = !hasMessage(draft, sessionID, messageID)
-      const parts = draft.part[messageID]
-      if (!parts) {
-        syncDebug.reducer.partUpdatedNoExistingParts(messageID, part.id, part.type)
-        draft.part[messageID] = [part]
-        return missingOwningMessage
-          ? {
-            changed: true,
-            materialization: { type: "incomplete-session-snapshot", sessionID, messageID, partID: part.id },
-          }
-          : true
-      }
+  const parts = draft.part[messageID]
+  if (!parts) {
+    syncDebug.reducer.partUpdatedNoExistingParts(messageID, part.id, part.type)
+    draft.part[messageID] = [part]
+    return missingOwningMessage
+      ? {
+          changed: true,
+          materialization: { type: "incomplete-session-snapshot", sessionID, messageID, partID: part.id },
+        }
+      : true
+  }
+  const result = Binary.search(parts, part.id, (p) => p.id)
+  if (result.found) {
+    const previous = parts[result.index]
+    if (shouldPreserveExistingPart(previous, part)) {
+      return false
+    }
+    const dedupeFields = getUpdatedDeltaFields(previous, part)
+    parts[result.index] = dedupeFields.length > 0
+      ? { ...part, __dedupeNextDeltaFields: dedupeFields } as unknown as Part
+      : part
+    draft.part[messageID] = parts
+  } else {
+    // Replace optimistic part — needs splice, so clone only when mutating structure
+    const hasOptimistic = parts.length > 0 && !(parts[0] as { sessionID?: string }).sessionID
+    const optimisticIdx = hasOptimistic && (part.type === "text" || part.type === "file")
+      ? parts.findIndex((p) => p.type === part.type && !(p as { sessionID?: string }).sessionID)
+      : -1
+    if (optimisticIdx >= 0) {
       const next = [...parts]
-      const result = Binary.search(next, part.id, (p) => p.id)
-      if (result.found) {
-        const previous = next[result.index]
-        if (shouldPreserveExistingPart(previous, part)) {
-          return false
-        }
-        const dedupeFields = getUpdatedDeltaFields(previous, part)
-        next[result.index] = dedupeFields.length > 0
-          ? { ...part, __dedupeNextDeltaFields: dedupeFields } as unknown as Part
-          : part
-      } else {
-        // Replace optimistic part (no sessionID) with server part of same type.
-        // Gate: only scan if the first part lacks sessionID (optimistic parts are
-        // always inserted first). Assistant messages never have optimistic parts,
-        // so this check is effectively free during streaming.
-        const hasOptimistic = next.length > 0 && !(next[0] as { sessionID?: string }).sessionID
-        const optimisticIdx = hasOptimistic && (part.type === "text" || part.type === "file")
-          ? next.findIndex((p) => p.type === part.type && !(p as { sessionID?: string }).sessionID)
-          : -1
-        if (optimisticIdx >= 0) {
-          next.splice(optimisticIdx, 1)
-        }
-        const insertResult = Binary.search(next, part.id, (p) => p.id)
-        next.splice(insertResult.index, 0, part)
-      }
+      next.splice(optimisticIdx, 1)
+      const insertResult = Binary.search(next, part.id, (p) => p.id)
+      next.splice(insertResult.index, 0, part)
       draft.part[messageID] = next
+    } else {
+      // No structural change needed — insert into existing array
+      const insertResult = Binary.search(parts, part.id, (p) => p.id)
+      parts.splice(insertResult.index, 0, part)
+      draft.part[messageID] = parts
+    }
+  }
       return missingOwningMessage
         ? {
           changed: true,
@@ -398,18 +401,18 @@ export function applyDirectoryEvent(
           materialization: { type: "incomplete-session-snapshot", messageID: props.messageID, partID: props.partID },
         }
       }
-      const existing = parts[result.index] as Record<string, unknown>
-      const existingValue = existing[props.field] as string | undefined
-      const dedupeFields = (existing as DedupeMetadata).__dedupeNextDeltaFields ?? []
-      const shouldDedupe = dedupeFields.includes(props.field)
-      // Create new Part object + new array so React detects the change
-      const next = [...parts]
-      next[result.index] = {
-        ...existing,
-        [props.field]: shouldDedupe ? appendNonOverlappingDelta(existingValue, props.delta) : (existingValue ?? "") + props.delta,
-        __dedupeNextDeltaFields: dedupeFields.filter((field) => field !== props.field),
-      } as unknown as Part
-      draft.part[props.messageID] = next
+  const existing = parts[result.index] as Record<string, unknown>
+  const existingValue = existing[props.field] as string | undefined
+  const dedupeFields = (existing as DedupeMetadata).__dedupeNextDeltaFields ?? []
+  const shouldDedupe = dedupeFields.includes(props.field)
+  // Only create a new reference for the changed part, reuse the same array
+  // (draft is a mutable copy — direct mutation is safe and avoids O(n) clone per delta)
+  parts[result.index] = {
+    ...existing,
+    [props.field]: shouldDedupe ? appendNonOverlappingDelta(existingValue, props.delta) : (existingValue ?? "") + props.delta,
+    __dedupeNextDeltaFields: dedupeFields.filter((field) => field !== props.field),
+  } as unknown as Part
+  draft.part[props.messageID] = parts
       return true
     }
 

@@ -260,6 +260,8 @@ export const dict = {
   'sessions.sidebar.session.menu.rename': 'Rename',
   'sessions.sidebar.session.rename.save': 'Save session name',
   'sessions.sidebar.session.rename.cancel': 'Cancel renaming session',
+  'sessions.sidebar.session.rename.emptyTitle': 'Session name cannot be empty',
+  'sessions.sidebar.session.rename.error': 'Failed to rename session',
   'sessions.sidebar.session.menu.unpin': 'Unpin session',
   'sessions.sidebar.session.menu.pin': 'Pin session',
   'sessions.sidebar.session.menu.share': 'Share',

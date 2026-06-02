@@ -261,6 +261,8 @@ export const dict: Record<I18nKey, string> = {
   "sessions.sidebar.session.menu.rename": "Renomear",
   "sessions.sidebar.session.rename.save": "Salvar nome da sessão",
   "sessions.sidebar.session.rename.cancel": "Cancelar renomeação da sessão",
+  "sessions.sidebar.session.rename.emptyTitle": "O nome da sessão não pode estar vazio",
+  "sessions.sidebar.session.rename.error": "Falha ao renomear a sessão",
   "sessions.sidebar.session.menu.unpin": "Desfixar sessão",
   "sessions.sidebar.session.menu.pin": "Fixar sessão",
   "sessions.sidebar.session.menu.share": "Compartilhar",

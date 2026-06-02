@@ -261,6 +261,8 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.session.menu.rename': '이름 변경',
   'sessions.sidebar.session.rename.save': '세션 이름 저장',
   'sessions.sidebar.session.rename.cancel': '세션 이름 변경 취소',
+  'sessions.sidebar.session.rename.emptyTitle': '세션 이름은 비워둘 수 없습니다',
+  'sessions.sidebar.session.rename.error': '세션 이름 변경 실패',
   'sessions.sidebar.session.menu.unpin': '세션 고정 해제',
   'sessions.sidebar.session.menu.pin': '세션 고정',
   'sessions.sidebar.session.menu.share': '공유',

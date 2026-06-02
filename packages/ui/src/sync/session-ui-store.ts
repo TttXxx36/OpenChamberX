@@ -58,6 +58,14 @@ import { getAttachedSessionDirectory } from "./session-worktree-contract"
 export type { AttachedFile }
 
 // ---------------------------------------------------------------------------
+// Named constants — magic numbers with semantic meaning
+// ---------------------------------------------------------------------------
+
+const DEFAULT_ABORT_PROMPT_DURATION_MS = 5000
+const DEFAULT_CONTEXT_THRESHOLD_TOKENS = 200_000
+const TEXT_PREVIEW_LENGTH = 50
+
+// ---------------------------------------------------------------------------
 // Send routing — shell mode, slash commands, or normal prompt
 // ---------------------------------------------------------------------------
 
@@ -563,7 +571,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
   clearAbortPrompt: () => set({ abortPromptSessionId: null, abortPromptExpiresAt: null }),
 
-  armAbortPrompt: (durationMs = 5000) => {
+  armAbortPrompt: (durationMs = DEFAULT_ABORT_PROMPT_DURATION_MS) => {
     const { currentSessionId } = get()
     if (!currentSessionId) return null
     const expiresAt = Date.now() + durationMs
@@ -609,7 +617,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     if (!lastTokens) return null
 
     const totalTokens = lastTokens.input + lastTokens.output + lastTokens.reasoning + (lastTokens.cache?.read ?? 0) + (lastTokens.cache?.write ?? 0)
-    const thresholdLimit = contextLimit > 0 ? contextLimit : 200000
+    const thresholdLimit = contextLimit > 0 ? contextLimit : DEFAULT_CONTEXT_THRESHOLD_TOKENS
     const percentage = contextLimit > 0 ? Math.round((totalTokens / contextLimit) * 100) : 0
     const normalizedOutput = outputLimit > 0 ? Math.round((lastTokens.output / outputLimit) * 100) : undefined
 
@@ -1013,7 +1021,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const targetParts = getSyncParts(targetMessage.id)
     const textPart = targetParts.find((p: Part) => p.type === "text") as TextPart | undefined
     const preview = textPart?.text
-      ? String(textPart.text).slice(0, 50) + (textPart.text.length > 50 ? "..." : "")
+      ? String(textPart.text).slice(0, TEXT_PREVIEW_LENGTH) + (textPart.text.length > TEXT_PREVIEW_LENGTH ? "..." : "")
       : "[No text]"
 
     // revertToMessage handles the redo stack push internally

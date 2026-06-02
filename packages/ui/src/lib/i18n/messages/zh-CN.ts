@@ -261,6 +261,8 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.session.menu.rename': '重命名',
   'sessions.sidebar.session.rename.save': '保存会话名称',
   'sessions.sidebar.session.rename.cancel': '取消重命名会话',
+  'sessions.sidebar.session.rename.emptyTitle': '会话名称不能为空',
+  'sessions.sidebar.session.rename.error': '重命名会话失败',
   'sessions.sidebar.session.menu.unpin': '取消置顶会话',
   'sessions.sidebar.session.menu.pin': '置顶会话',
   'sessions.sidebar.session.menu.share': '分享',
