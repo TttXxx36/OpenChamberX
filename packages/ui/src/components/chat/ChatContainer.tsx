@@ -255,7 +255,7 @@ const ChatViewport = React.memo(({
                         <div className="flex-shrink-0" style={{ height: isMobile ? '40px' : '10vh' }} aria-hidden="true" />
                     </div>
                 </ScrollShadow>
-                <OverlayScrollbar containerRef={scrollRef} suppressVisibility={isProgrammaticFollowActive} userIntentOnly observeMutations={false} />
+                <OverlayScrollbar containerRef={scrollRef} alwaysVisible observeMutations={false} />
                 <ChatScrollMarkers
                   messages={renderedMessages}
                   messageListRef={messageListRef}
