@@ -28,6 +28,9 @@ import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useGitBranchLabel } from '@/stores/useGitStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
+import { runtimeFetch } from '@/lib/runtime-fetch';
+import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
+import { getRuntimeBearerTokenSync } from '@/lib/runtime-auth';
 
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';

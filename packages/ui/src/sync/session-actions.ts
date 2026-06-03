@@ -22,13 +22,6 @@ const MESSAGE_REFETCH_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"
 const UNREVERT_REFETCH_ATTEMPTS = 3
 const UNREVERT_REFETCH_RETRY_MS = 150
 
-function formatSdkError(error: unknown): string {
-  if (typeof error === 'object' && error !== null && 'message' in error) {
-    return String((error as { message: string }).message)
-  }
-  return 'Unknown error'
-}
-
 // Reference set by SyncProvider — allows actions to access SDK and stores
 let _sdk: OpencodeClient | null = null
 let _childStores: ChildStoreManager | null = null

@@ -3,6 +3,7 @@ const LazyCodeMirrorEditor = React.lazy(() => import('@/components/ui/CodeMirror
 
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { runtimeFetch } from '@/lib/runtime-fetch';
 
 import {
   DropdownMenu,

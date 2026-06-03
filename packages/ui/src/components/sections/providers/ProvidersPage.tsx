@@ -22,6 +22,8 @@ import { openExternalUrl } from '@/lib/url';
 import type { ModelMetadata } from '@/types';
 import { useI18n } from '@/lib/i18n';
 import { formatTokens } from '@/lib/format';
+import { opencodeClient } from '@/lib/opencode/client';
+import { runtimeFetch } from '@/lib/runtime-fetch';
 
 const ADD_PROVIDER_ID = '__add_provider__';
 
