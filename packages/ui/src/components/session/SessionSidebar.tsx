@@ -176,7 +176,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [collapsedProjects, setCollapsedProjects] = React.useState<Set<string>>(new Set());
 
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
-  const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
+  const [visibleSessionCountByGroup, setVisibleSessionCountByGroup] = React.useState<Map<string, number>>(new Map());
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
   const [openSidebarMenuKey, setOpenSidebarMenuKey] = React.useState<string | null>(null);
@@ -360,6 +360,22 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     syncSessionsSnapshotRef.current = liveSessions;
   }, [syncSessionStructureSignature, liveSessions]);
 
+  const projectWorktreeDiscoveryKey = React.useMemo(
+    () => projects
+      .map((project) => `${project.id}:${normalizePath(project.path) ?? ''}`)
+      .join('|'),
+    [projects],
+  );
+
+  const initialGlobalSessionsRefreshStartedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (initialGlobalSessionsRefreshStartedRef.current) {
+      return;
+    }
+    initialGlobalSessionsRefreshStartedRef.current = true;
+    void refreshGlobalSessions(syncSessionsSnapshotRef.current);
+  }, []);
+
   React.useEffect(() => {
     let cancelled = false;
 
@@ -397,13 +413,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       });
     };
 
-    void refreshGlobalSessions(syncSessionsSnapshotRef.current);
     void discoverWorktrees();
 
     return () => {
       cancelled = true;
     };
-  }, [currentDirectory, syncSessionStructureSignature, projects]);
+  }, [projectWorktreeDiscoveryKey]);
 
   React.useEffect(() => {
     let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -666,20 +681,43 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     [collapsedFolderIds, toggleFolderCollapse, createFolder, t],
   );
 
-  const toggleGroupSessionLimit = React.useCallback((groupId: string) => {
-    setExpandedSessionGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupId)) {
-        next.delete(groupId);
-      } else {
-        next.add(groupId);
-      }
+  const showMoreGroupSessions = React.useCallback((groupId: string, currentVisibleCount: number) => {
+    setVisibleSessionCountByGroup((prev) => {
+      const next = new Map(prev);
+      next.set(groupId, currentVisibleCount + 7);
       return next;
+    });
+  }, []);
+
+  const resetGroupSessionLimit = React.useCallback((groupId: string) => {
+    setVisibleSessionCountByGroup((prev) => {
+      if (!prev.has(groupId)) {
+        return prev;
+      }
+      const next = new Map(prev);
+      next.delete(groupId);
+      return next;
+    });
+  }, []);
+
+  const resetProjectSessionLimits = React.useCallback((projectId: string) => {
+    setVisibleSessionCountByGroup((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      const projectGroupPrefix = `${projectId}:`;
+      for (const groupId of next.keys()) {
+        if (groupId.startsWith(projectGroupPrefix)) {
+          next.delete(groupId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
     });
   }, []);
 
   const collapseAllProjects = React.useCallback(() => {
     ignoreIntersectionUntil.current = Date.now() + 150;
+    setVisibleSessionCountByGroup(new Map());
     setCollapsedProjects(() => {
       const allIds = new Set(projects.map((p) => p.id));
       try {
@@ -694,6 +732,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   const expandAllProjects = React.useCallback(() => {
     ignoreIntersectionUntil.current = Date.now() + 150;
+    setVisibleSessionCountByGroup(new Map());
     setCollapsedProjects(() => {
       const empty = new Set<string>();
       try {
@@ -709,6 +748,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const toggleProject = React.useCallback((projectId: string) => {
     // Ignore intersection events for a short period after toggling
     ignoreIntersectionUntil.current = Date.now() + 150;
+    resetProjectSessionLimits(projectId);
     setCollapsedProjects((prev) => {
       const next = new Set(prev);
       if (next.has(projectId)) {
@@ -726,7 +766,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       }
       return next;
     });
-  }, [isVSCode, safeStorage, scheduleCollapsedProjectsPersist]);
+  }, [isVSCode, resetProjectSessionLimits, safeStorage, scheduleCollapsedProjectsPersist]);
 
   const normalizedProjects = React.useMemo(() => {
     return projects
@@ -918,6 +958,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [projectSections, homeDirectory]);
 
   const showRecentSection = useSessionDisplayStore((state) => state.showRecentSection);
+  const showArchivedSessions = useSessionDisplayStore((state) => state.showArchivedSessions);
 
   const activeNowSessions = React.useMemo(() => {
     if (!showRecentSection) {
@@ -995,8 +1036,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   });
 
   const sectionsForSidebarRender = React.useMemo(() => {
-    if (!isVSCode || hasSessionSearchQuery || recentSessionIds.size === 0) {
-      return sectionsForRender;
+    const archiveFilteredSections = showArchivedSessions
+      ? sectionsForRender
+      : sectionsForRender.map((section) => ({
+        ...section,
+        groups: section.groups.filter((group) => !group.isArchivedBucket),
+      }));
+
+    if (isVSCode || hasSessionSearchQuery || recentSessionIds.size === 0) {
+      return archiveFilteredSections;
     }
 
     const filterNodes = (nodes: SessionNode[]): SessionNode[] => {
@@ -1019,14 +1067,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       }, []);
     };
 
-    return sectionsForRender.map((section) => ({
+    return archiveFilteredSections.map((section) => ({
       ...section,
       groups: section.groups.map((group) => ({
         ...group,
         sessions: filterNodes(group.sessions),
       })),
     }));
-  }, [isVSCode, hasSessionSearchQuery, recentSessionIds, sectionsForRender]);
+  }, [isVSCode, hasSessionSearchQuery, recentSessionIds, sectionsForRender, showArchivedSessions]);
 
   const prLookupKeys = React.useMemo(() => {
     const keys = new Set<string>();
@@ -1113,7 +1161,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     });
 
     void refreshPrStatusTargets([...uniqueTargets.values()], {
-      force: true,
       silent: true,
       markInitialResolved: true,
     });
@@ -1233,13 +1280,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const toggleCollapsedGroup = React.useCallback((key: string) => {
+    resetGroupSessionLimit(key);
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  }, []);
+  }, [resetGroupSessionLimit]);
 
   const prVisualStateByDirectoryBranch = React.useMemo(() => {
     const result = new Map<string, PrIndicator>();
@@ -1273,7 +1321,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         hasSessionSearchQuery={hasSessionSearchQuery}
         normalizedSessionSearchQuery={normalizedSessionSearchQuery}
         groupSearchDataByGroup={groupSearchDataByGroup}
-        expandedSessionGroups={expandedSessionGroups}
+        visibleSessionCount={visibleSessionCountByGroup.get(groupKey)}
         collapsedGroups={collapsedGroups}
         hideDirectoryControls={hideDirectoryControls}
         collapsedFolderIds={collapsedFolderIds}
@@ -1286,7 +1334,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         currentSessionDirectory={currentSessionDirectory}
         projectRepoStatus={projectRepoStatus}
         lastRepoStatus={lastRepoStatusRef.current}
-        toggleGroupSessionLimit={toggleGroupSessionLimit}
+        showMoreGroupSessions={showMoreGroupSessions}
+        resetGroupSessionLimit={resetGroupSessionLimit}
         mobileVariant={mobileVariant}
         alwaysShowActions={alwaysShowSidebarActions}
         activeProjectId={activeProjectId}
@@ -1311,7 +1360,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       hasSessionSearchQuery,
       normalizedSessionSearchQuery,
       groupSearchDataByGroup,
-      expandedSessionGroups,
+      visibleSessionCountByGroup,
       collapsedGroups,
       hideDirectoryControls,
       collapsedFolderIds,
@@ -1322,7 +1371,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       renderSessionNode,
       currentSessionDirectory,
       projectRepoStatus,
-      toggleGroupSessionLimit,
+      showMoreGroupSessions,
+      resetGroupSessionLimit,
       mobileVariant,
       alwaysShowSidebarActions,
       activeProjectId,
@@ -1341,7 +1391,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     ],
   );
 
-  const topContent = showRecentSection && !hasSessionSearchQuery ? (
+  const topContent = showRecentSection && !isVSCode && !hasSessionSearchQuery ? (
     <SidebarActivitySections
       sections={activitySections}
       renderSessionNode={renderSessionNode}
@@ -1520,6 +1570,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     openMultiRunLauncher();
   }, [mobileVariant, openMultiRunLauncher, setActiveMainTab, setSessionSwitcherOpen]);
 
+  const handleOpenNewSessionDraftFromHeader = React.useCallback(() => {
+    setActiveMainTab('chat');
+    if (mobileVariant) {
+      setSessionSwitcherOpen(false);
+    }
+    openNewSessionDraft();
+  }, [mobileVariant, openNewSessionDraft, setActiveMainTab, setSessionSwitcherOpen]);
+
   return (
     <div
       ref={sessionSearchContainerRef}
@@ -1530,7 +1588,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     >
       <SidebarHeader
         hideDirectoryControls={hideDirectoryControls}
+        showRecentControls={!isVSCode}
         handleOpenDirectoryDialog={handleOpenDirectoryDialog}
+        openNewSessionDraft={handleOpenNewSessionDraftFromHeader}
         canOpenMultiRun={projects.length > 0}
         openMultiRunLauncher={handleOpenMultiRunFromHeader}
         headerActionIconClass={headerActionIconClass}

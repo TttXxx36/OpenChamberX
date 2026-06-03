@@ -33,6 +33,9 @@ import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, getModifierLabel, getRevealLabelKey, hasModifier } from '@/lib/utils';
 import { getLanguageFromExtension, getImageMimeType, isImageFile } from '@/lib/toolHelpers';
+import { getRuntimeUrlResolver } from '@/lib/runtime-url';
+import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
+import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { EditorView } from '@codemirror/view';
 import { convertFileSrc } from '@tauri-apps/api/core';
@@ -293,6 +296,32 @@ const isFileMissingError = (error: unknown): boolean => {
 
 const MAX_VIEW_CHARS = 200_000;
 const FILE_EDITOR_AUTO_SAVE_KEY = 'openchamber:files:auto-save-enabled';
+type FileLineEnding = '\n' | '\r\n';
+
+const detectFileLineEnding = (content: string): FileLineEnding => {
+  let crlf = 0;
+  let lf = 0;
+
+  for (let index = 0; index < content.length; index += 1) {
+    if (content.charCodeAt(index) !== 10) {
+      continue;
+    }
+    if (index > 0 && content.charCodeAt(index - 1) === 13) {
+      crlf += 1;
+    } else {
+      lf += 1;
+    }
+  }
+
+  return crlf > lf ? '\r\n' : '\n';
+};
+
+const normalizeEditorLineEndings = (content: string): string => content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+const serializeEditorContent = (content: string, lineEnding: FileLineEnding): string => {
+  const normalized = normalizeEditorLineEndings(content);
+  return lineEnding === '\r\n' ? normalized.replace(/\n/g, '\r\n') : normalized;
+};
 
 const getInitialAutoSaveEnabled = (): boolean => {
   if (typeof window === 'undefined') {
@@ -764,11 +793,13 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [fileLoading, setFileLoading] = React.useState(false);
   const [fileError, setFileError] = React.useState<string | null>(null);
   const [desktopImageSrc, setDesktopImageSrc] = React.useState<string>('');
+  const [imageAssetAuthReadyKey, setImageAssetAuthReadyKey] = React.useState('');
 
   const [loadedFilePath, setLoadedFilePath] = React.useState<string | null>(null);
 
   const [draftContent, setDraftContent] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
+  const [loadedFileLineEnding, setLoadedFileLineEnding] = React.useState<FileLineEnding>('\n');
   const dialogInputRef = React.useRef<HTMLInputElement>(null);
   const autoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastLoadedFileStatRef = React.useRef<FileStatSnapshot | null>(null);
@@ -1014,7 +1045,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     const isCurrentRequest = () => activeDirectoryLoadIdsRef.current.get(normalizedDir) === requestId;
 
     const respectGitignore = !showGitignored;
-    const listPromise = runtime.isDesktop
+    const listPromise = files.listDirectory
       ? files.listDirectory(normalizedDir, { respectGitignore }).then((result) => result.entries.map((entry) => ({
         name: entry.name,
         path: entry.path,
@@ -1058,7 +1089,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         inFlightDirsRef.current = new Set(inFlightDirsRef.current);
         inFlightDirsRef.current.delete(normalizedDir);
       });
-  }, [files, mapDirectoryEntries, runtime.isDesktop, showGitignored]);
+  }, [files, mapDirectoryEntries, showGitignored]);
 
   const refreshRoot = React.useCallback(async () => {
     if (!root) {
@@ -1384,7 +1415,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     if (options?.optional) {
       params.set('optional', 'true');
     }
-    const response = await fetch(`/api/fs/read?${params.toString()}`, {
+    const response = await runtimeFetch(`/api/fs/read?${params.toString()}`, {
       // Avoid conditional requests (304 + empty body).
       cache: options?.optional ? 'no-store' : 'default',
     });
@@ -1455,7 +1486,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     setIsSaving(true);
 
     try {
-      const result = await files.writeFile(selectedFile.path, draftContent);
+      const contentToWrite = serializeEditorContent(draftContent, loadedFileLineEnding);
+      const result = await files.writeFile(selectedFile.path, contentToWrite);
       if (!result?.success) {
         toast.error(t('filesView.toast.writeFileFailed'));
         return false;
@@ -1476,7 +1508,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     } finally {
       setIsSaving(false);
     }
-  }, [draftContent, files, isDirty, readFileStat, selectedFile, t]);
+  }, [draftContent, files, isDirty, loadedFileLineEnding, readFileStat, selectedFile, t]);
 
   React.useEffect(() => {
     if (!isDirty) {
@@ -1631,10 +1663,12 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         if (!isCurrentLoad()) {
           return;
         }
-        setFileContent(content);
-        setDraftContent(content.length > MAX_VIEW_CHARS
-          ? `${content.slice(0, MAX_VIEW_CHARS)}\n\n… truncated …`
-          : content);
+        const editorContent = normalizeEditorLineEndings(content);
+        setLoadedFileLineEnding(detectFileLineEnding(content));
+        setFileContent(editorContent);
+        setDraftContent(editorContent.length > MAX_VIEW_CHARS
+          ? `${editorContent.slice(0, MAX_VIEW_CHARS)}\n\n… truncated …`
+          : editorContent);
         setLoadedFilePath(node.path);
         void readFileStat(node.path, readOptions)
           .then((stat) => {
@@ -2529,6 +2563,31 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     [lightTheme.metadata.id, darkTheme.metadata.id],
   );
 
+  const imageAssetAuthKey = selectedFile?.path && isSelectedImage && !runtime.isDesktop && !isSelectedSvg
+    ? `${selectedFile.path}|${selectedFileReadOptions.allowOutsideWorkspace ? 'outside' : 'workspace'}`
+    : '';
+
+  React.useEffect(() => {
+    if (!imageAssetAuthKey) {
+      setImageAssetAuthReadyKey('');
+      return;
+    }
+
+    let cancelled = false;
+    setImageAssetAuthReadyKey('');
+    void refreshRuntimeUrlAuthToken(getRuntimeApiBaseUrl())
+      .then((token) => {
+        if (!cancelled && token) setImageAssetAuthReadyKey(imageAssetAuthKey);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageAssetAuthKey]);
+
+  const isImageAssetAuthLoading = Boolean(imageAssetAuthKey && imageAssetAuthReadyKey !== imageAssetAuthKey);
+
   const imageSrc = selectedFile?.path && isSelectedImage
     ? (runtime.isDesktop
       ? (isSelectedSvg
@@ -2536,10 +2595,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         : desktopImageSrc)
       : (isSelectedSvg
         ? `data:${getImageMimeType(selectedFile.path)};utf8,${encodeURIComponent(fileContent)}`
-        : `/api/fs/raw?${new URLSearchParams({
+        : imageAssetAuthReadyKey === imageAssetAuthKey ? getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', {
           path: selectedFile.path,
-          ...(selectedFileReadOptions.allowOutsideWorkspace ? { allowOutsideWorkspace: 'true' } : {}),
-        }).toString()}`))
+          allowOutsideWorkspace: selectedFileReadOptions.allowOutsideWorkspace ? 'true' : undefined,
+        }) : ''))
     : '';
 
   React.useEffect(() => {
@@ -3161,7 +3220,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
           {!selectedFile ? (
             <div className="p-3 typography-ui text-muted-foreground">{t('filesView.editor.pickFileFromTree')}</div>
-          ) : fileLoading ? (
+          ) : (fileLoading || isImageAssetAuthLoading) ? (
             suppressFileLoadingIndicator
               ? <div className="p-3" />
               : (
@@ -3499,7 +3558,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           {renderFloatingFileControls({ exitFullscreenOnly: true })}
         </div>
         <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
-          {fileLoading ? (
+          {(fileLoading || isImageAssetAuthLoading) ? (
             suppressFileLoadingIndicator
               ? <div className="p-4" />
               : (

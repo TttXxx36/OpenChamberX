@@ -21,7 +21,7 @@ import { buildExportFilename, downloadAsMarkdown, formatSessionAsMarkdown, getEx
 import type { ChildSessionExport } from '@/lib/exportSession';
 import { buildSessionMessageRecordsSnapshot, useDirectoryStore, useGlobalSessionStatus, useSession, useSessionPermissions } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
-import { useViewportStore } from '@/sync/viewport-store';
+import { useViewportStore, viewportSessionKey } from '@/sync/viewport-store';
 import { DraggableSessionRow } from './sessionFolderDnd';
 import type { SessionNode, SessionSummaryMeta } from './types';
 import { formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText, resolveSessionDiffStats } from './utils';
@@ -29,6 +29,8 @@ import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSessionUnseenCount } from '@/sync/notification-store';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
 import { useI18n } from '@/lib/i18n';
+import { getRuntimeBearerTokenSync } from '@/lib/runtime-auth';
+import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { parseMultiRunSessionTitle } from '@/lib/multirun/title';
 import { MultiRunFusionDialog } from '@/components/multirun/MultiRunFusionDialog';
 import { FusionIcon } from '@/components/icons/FusionIcon';
@@ -284,8 +286,13 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         : (showQuickArchiveAction ? 'group-hover:pr-12 group-focus-within:pr-12' : 'group-hover:pr-5 group-focus-within:pr-5'));
   const alwaysActionPaddingClass = showQuickArchiveAction ? 'pr-13' : 'pr-7';
   const suppressNextSelectRef = React.useRef(false);
-  const editCancelledRef = React.useRef(false);
   const [isTouchPressed, setIsTouchPressed] = React.useState(false);
+  const editingIdRef = React.useRef(editingId);
+  editingIdRef.current = editingId;
+  const pendingRenameRef = React.useRef<{ id: string; title: string } | null>(null);
+  const handleSaveEditRef = React.useRef(handleSaveEdit);
+  handleSaveEditRef.current = handleSaveEdit;
+  const formRef = React.useRef<HTMLFormElement>(null);
 
   const session = node.session;
   const liveSession = useSession(session.id);
@@ -321,7 +328,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
 
   const menuInstanceKey = `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${session.id}`;
   const isZombie = useViewportStore(
-    React.useCallback((state) => Boolean(state.sessionMemoryState.get(session.id)?.isZombie), [session.id]),
+    React.useCallback((state) => Boolean(state.sessionMemoryState.get(viewportSessionKey(session.id))?.isZombie), [session.id]),
   );
   const sessionStatus = useGlobalSessionStatus(session.id);
   const sessionPermissions = useSessionPermissions(session.id, sessionDirectory ?? undefined);
@@ -442,10 +449,24 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     void invokeDesktop('desktop_open_session_mini_chat_window', {
       sessionId: session.id,
       directory: sessionDirectory,
+      apiBaseUrl: getRuntimeApiBaseUrl(),
+      clientToken: getRuntimeBearerTokenSync(),
     }).catch((error) => {
       console.warn('[session-sidebar] failed to open mini chat window', error);
     });
   }, [session.id, sessionDirectory]);
+
+  // Capture outside-clicks to save edits — immune to focus-race with onBlur.
+  React.useEffect(() => {
+    if (editingId !== session.id) return;
+    const handleDocMouseDown = (e: MouseEvent) => {
+      if (formRef.current && !formRef.current.contains(e.target as Node)) {
+        handleSaveEditRef.current();
+      }
+    };
+    document.addEventListener('mousedown', handleDocMouseDown);
+    return () => document.removeEventListener('mousedown', handleDocMouseDown);
+  }, [editingId, session.id]);
 
   if (editingId === session.id) {
     return (
@@ -455,8 +476,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       >
         <div className="flex min-w-0 flex-1 flex-col gap-0">
           <form
+            ref={formRef}
             className="flex w-full items-center gap-2"
-
             onSubmit={(event) => {
               event.preventDefault();
               handleSaveEdit();
@@ -471,20 +492,12 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
                   event.stopPropagation();
-                  editCancelledRef.current = true;
                   handleCancelEdit();
                   return;
                 }
                 if (event.key === ' ' || event.key === 'Enter') {
                   event.stopPropagation();
                 }
-              }}
-              onBlur={() => {
-                if (editCancelledRef.current) {
-                  editCancelledRef.current = false;
-                  return;
-                }
-                handleSaveEdit();
               }}
             />
             <button
@@ -592,6 +605,15 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     setOpenSidebarMenuKey(open ? menuInstanceKey : null);
   };
 
+  const handleMenuOpenChangeComplete = (open: boolean) => {
+    if (!open && pendingRenameRef.current) {
+      const { id, title } = pendingRenameRef.current;
+      pendingRenameRef.current = null;
+      setEditingId(id);
+      setEditTitle(title);
+    }
+  };
+
   const handleMenuTriggerClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -685,11 +707,13 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   };
 
   const sessionMenuContent = (
-    <DropdownMenuContent align="end" className="min-w-[180px]" onCloseAutoFocus={(event) => { if (renamingFolderId) event.preventDefault(); }}>
+    <DropdownMenuContent align="end" className="min-w-[180px]" finalFocus={() => (renamingFolderId || editingIdRef.current) ? false : true}>
       <DropdownMenuItem
         onClick={() => {
-          setEditingId(session.id);
-          setEditTitle(sessionTitle);
+          // Defer rename until dropdown close transition completes.
+          // onOpenChangeComplete fires after animation + focus cleanup are done,
+          // avoiding focus stealing from Base UI's unmount cleanup.
+          pendingRenameRef.current = { id: session.id, title: sessionTitle };
         }}
         className="[&>svg]:mr-1"
       >
@@ -991,7 +1015,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 </TooltipContent>
               </Tooltip>
             ) : null}
-            <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange}>
+            <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange} onOpenChangeComplete={handleMenuOpenChangeComplete}>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"

@@ -14,6 +14,7 @@ import { updateDesktopSettings } from "@/lib/persistence";
 import { useDirectoryStore } from "@/stores/useDirectoryStore";
 import { streamDebugEnabled } from "@/stores/utils/streamDebug";
 import { parseModelIdentifier } from "@/lib/modelIdentifier";
+import { runtimeFetch } from "@/lib/runtime-fetch";
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_PROXY_URL = "/api/openchamber/models-metadata";
@@ -108,7 +109,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
         }
 
         // 2. Fetch API (Web/server)
-        const response = await fetch('/api/config/settings', {
+        const response = await runtimeFetch('/api/config/settings', {
             method: 'GET',
             headers: { Accept: 'application/json' },
         });
@@ -416,7 +417,9 @@ const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => 
                 requestInit.credentials = 'same-origin';
             }
 
-            const response = await fetch(source, requestInit);
+            const response = isAbsoluteUrl
+                ? await fetch(source, requestInit)
+                : await runtimeFetch(source, requestInit);
 
             if (!response.ok) {
                 throw new Error(`Metadata request to ${source} returned status ${response.status}`);
@@ -1739,6 +1742,20 @@ export const useConfigStore = create<ConfigStore>()(
                             });
                         };
 
+                        // Prefer the selected agent's configured model when switching agents.
+                        const agent = agents.find((candidate) => candidate.name === agentName);
+                        const agentModelSelection = agent?.model;
+                        if (agentModelSelection?.providerID && agentModelSelection?.modelID) {
+                            const { providerID, modelID } = agentModelSelection;
+                            const agentProvider = providers.find((provider) => provider.id === providerID);
+                            const agentModel = agentProvider?.models.find((model) => model.id === modelID);
+
+                            if (agentModel) {
+                                applyResolvedModelSelection(providerID, modelID, undefined);
+                                return;
+                            }
+                        }
+
                         if (currentSessionId) {
                             const existingAgentModel = useSelectionStore.getState().getAgentModelForSession(currentSessionId, agentName);
                             if (existingAgentModel && hasProviderModel(providers, existingAgentModel.providerId, existingAgentModel.modelId)) {
@@ -1759,11 +1776,7 @@ export const useConfigStore = create<ConfigStore>()(
                             }
                         }
 
-                        if (hasProviderModel(providers, currentProviderId, currentModelId)) {
-                            return;
-                        }
-
-                        // If settings has a default model, use it instead of agent's preferred
+                        // If the agent has no preferred model, use settings default.
                         if (settingsDefaultModel) {
                             const parsed = parseModelString(settingsDefaultModel);
                             if (parsed) {
@@ -1784,18 +1797,7 @@ export const useConfigStore = create<ConfigStore>()(
                             }
                         }
 
-                        // Fall back to agent's preferred model
-                        const agent = agents.find((candidate) => candidate.name === agentName);
-                        const agentModelSelection = agent?.model;
-                        if (agentModelSelection?.providerID && agentModelSelection?.modelID) {
-                            const { providerID, modelID } = agentModelSelection;
-                            const agentProvider = providers.find((provider) => provider.id === providerID);
-                            const agentModel = agentProvider?.models.find((model) => model.id === modelID);
-
-                            if (agentModel) {
-                                applyResolvedModelSelection(providerID, modelID, undefined);
-                            }
-                        }
+                        // Otherwise keep the current valid model selection unchanged.
                     }
                 },
 

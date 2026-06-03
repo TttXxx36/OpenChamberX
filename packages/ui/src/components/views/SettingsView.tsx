@@ -17,11 +17,12 @@ import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar'
 import { CommandsPage } from '@/components/sections/commands/CommandsPage';
 import { McpSidebar } from '@/components/sections/mcp/McpSidebar';
 import { McpPage } from '@/components/sections/mcp/McpPage';
+import { PluginsSidebar, PluginsPage } from '@/components/sections/plugins';
+import { usePluginsStore } from '@/stores/usePluginsStore';
 import { SkillsSidebar } from '@/components/sections/skills/SkillsSidebar';
 import { SkillsPage } from '@/components/sections/skills/SkillsPage';
 import { ProjectsSidebar } from '@/components/sections/projects/ProjectsSidebar';
 import { ProjectsPage } from '@/components/sections/projects/ProjectsPage';
-import { RemoteInstancesSidebar } from '@/components/sections/remote-instances/RemoteInstancesSidebar';
 import { RemoteInstancesPage } from '@/components/sections/remote-instances/RemoteInstancesPage';
 import { ProvidersSidebar } from '@/components/sections/providers/ProvidersSidebar';
 import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
@@ -71,6 +72,8 @@ interface SettingsViewProps {
   forceMobile?: boolean;
   /** Rendered inside a window/dialog (skip traffic light padding) */
   isWindowed?: boolean;
+  /** Restrict top-level settings navigation to a specific product surface. */
+  visiblePageSlugs?: SettingsPageSlug[];
 }
 
 const pageOrder: SettingsPageSlug[] = [
@@ -89,6 +92,7 @@ const pageOrder: SettingsPageSlug[] = [
   'behavior',
   'commands',
   'mcp',
+  'plugins',
   'providers',
   'usage',
   'skills.installed',
@@ -177,6 +181,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return 'slash-commands-2';
     case 'mcp':
       return 'plug-2';
+    case 'plugins':
+      return 'code-box';
 
     case 'skills.installed':
       return 'book-open';
@@ -275,7 +281,7 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
   );
 };
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile, isWindowed }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile, isWindowed, visiblePageSlugs }) => {
   const { t } = useI18n();
   const deviceInfo = useDeviceInfo();
   const isMobile = forceMobile ?? deviceInfo.isMobile;
@@ -304,12 +310,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const runtimeCtx = React.useMemo(() => buildRuntimeContext(isDesktopApp), [isDesktopApp]);
 
   const visiblePages = React.useMemo(() => {
+    const allowedPages = visiblePageSlugs ? new Set<SettingsPageSlug>(visiblePageSlugs) : null;
     return SETTINGS_PAGE_METADATA
       .filter((page) => page.slug !== 'home')
+      .filter((page) => !allowedPages || allowedPages.has(page.slug))
       .filter((page) => isPageAvailable(page, runtimeCtx))
       .filter((page) => !(runtimeCtx.isVSCode && page.slug === 'projects'))
       .filter((page) => !(isMobile && page.slug === 'shortcuts'));
-  }, [runtimeCtx, isMobile]);
+  }, [runtimeCtx, isMobile, visiblePageSlugs]);
 
   const sortedFilteredPages = React.useMemo(() => {
     const rank = new Map<SettingsPageSlug, number>(pageOrder.map((s, i) => [s, i]));
@@ -400,6 +408,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       void useMcpConfigStore.getState().loadMcpConfigs();
       return;
     }
+    if (settingsSlug === 'plugins') {
+      void usePluginsStore.getState().loadPlugins();
+      return;
+    }
     if (settingsSlug === 'skills.installed' || settingsSlug === 'skills.catalog') {
       void useSkillsStore.getState().loadSkills();
       void useSkillsCatalogStore.getState().loadCatalog();
@@ -458,6 +470,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return t('settings.page.commands.title');
       case 'mcp':
         return t('settings.page.mcp.title');
+      case 'plugins':
+        return t('settings.page.plugins.title');
       case 'skills.installed':
         return t('settings.page.skills.title');
       case 'skills.catalog':
@@ -505,14 +519,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     switch (slug) {
       case 'projects':
         return <ProjectsSidebar onItemSelect={opts.onItemSelect} />;
-      case 'remote-instances':
-        return <RemoteInstancesSidebar onItemSelect={opts.onItemSelect} />;
       case 'agents':
         return <AgentsSidebar onItemSelect={opts.onItemSelect} />;
       case 'commands':
         return <CommandsSidebar onItemSelect={opts.onItemSelect} />;
       case 'mcp':
         return <McpSidebar onItemSelect={opts.onItemSelect} />;
+      case 'plugins':
+        return <PluginsSidebar onItemSelect={opts.onItemSelect} />;
       case 'skills.installed':
         return <SkillsSidebar onItemSelect={opts.onItemSelect} />;
       case 'providers':
@@ -549,6 +563,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <CommandsPage />;
       case 'mcp':
         return <McpPage />;
+      case 'plugins':
+        return <PluginsPage />;
       case 'skills.installed':
         return <SkillsPage view="installed" />;
       case 'skills.catalog':
@@ -832,21 +848,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       {isMobile ? (
         <div
           className={cn(
-            'flex items-center gap-2 px-3 py-2 border-b',
+            'flex h-[var(--oc-header-height,56px)] shrink-0 items-center gap-2 border-b px-3',
             'bg-background'
           )}
           style={{ borderColor: 'var(--interactive-border)' }}
         >
-          <button
-            type="button"
-            onClick={showBackButton ? handleBack : onClose}
-            aria-label={mobileBackButtonLabel}
-            className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <Icon name="arrow-left-s" className="h-5 w-5" />
-          </button>
+          {(showBackButton || onClose) ? (
+            <button
+              type="button"
+              onClick={showBackButton ? handleBack : onClose}
+              aria-label={mobileBackButtonLabel}
+              className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Icon name="arrow-left-s" className="h-5 w-5" />
+            </button>
+          ) : null}
 
-          <div className="min-w-0 flex-1 typography-ui-label font-medium text-foreground truncate">
+          <div className="min-w-0 flex-1 px-2 typography-ui-label font-medium text-foreground truncate">
             {mobileStage === 'nav'
               ? t('settings.view.home.title')
               : (activePageMeta ? getPageTitle(activePageMeta.slug) : t('settings.view.home.title'))}

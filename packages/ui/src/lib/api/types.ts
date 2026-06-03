@@ -1,4 +1,5 @@
 import type { WorktreeMetadata } from '@/types/worktree';
+import type { DraftStarterRef } from '@/lib/draftStarters';
 
 export type RuntimePlatform = 'web' | 'desktop' | 'vscode';
 
@@ -118,11 +119,19 @@ export interface GitRebaseInProgress {
   onto: string;
 }
 
+export interface GitRemoteComparison {
+  remote: string;
+  branch: string;
+  ahead: number;
+  behind: number;
+}
+
 export interface GitStatus {
   current: string;
   tracking: string | null;
   ahead: number;
   behind: number;
+  upstreamComparison?: GitRemoteComparison | null;
   files: GitStatusFile[];
   isClean: boolean;
   diffStats?: Record<string, { insertions: number; deletions: number }>;
@@ -228,6 +237,37 @@ export interface GitMergeResult {
   conflictFiles?: string[];
 }
 
+export interface CheckoutCommitResponse {
+  success: boolean;
+}
+
+export interface CherryPickRequest {
+  hash: string;
+}
+export interface CherryPickResponse {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+export interface RevertCommitRequest {
+  hash: string;
+}
+export interface RevertCommitResponse {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+export interface ResetToCommitRequest {
+  hash: string;
+  mode: 'soft' | 'mixed' | 'hard';
+  force?: boolean;
+}
+export interface ResetToCommitResponse {
+  success: boolean;
+}
+
 export interface GitRebaseResult {
   success: boolean;
   conflict?: boolean;
@@ -283,6 +323,7 @@ export interface GitLogEntry {
   filesChanged: number;
   insertions: number;
   deletions: number;
+  parents: string[];
 }
 
 export interface GitLogResponse {
@@ -396,6 +437,7 @@ export interface GitLogOptions {
   from?: string;
   to?: string;
   file?: string;
+  all?: boolean;
 }
 
 export interface GeneratedCommitMessage {
@@ -476,6 +518,10 @@ export interface GitAPI {
   merge(directory: string, options: { branch: string }): Promise<GitMergeResult>;
   abortMerge(directory: string): Promise<{ success: boolean }>;
   continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
+  checkoutCommit(directory: string, hash: string): Promise<CheckoutCommitResponse>;
+  cherryPick(directory: string, hash: string): Promise<CherryPickResponse>;
+  revertCommit(directory: string, hash: string): Promise<RevertCommitResponse>;
+  resetToCommit(directory: string, hash: string, mode: 'soft' | 'mixed' | 'hard', force?: boolean): Promise<ResetToCommitResponse>;
   stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>;
   stashPop(directory: string): Promise<{ success: boolean }>;
   getConflictDetails(directory: string): Promise<MergeConflictDetails>;
@@ -627,6 +673,7 @@ export interface SettingsPayload {
   gitModelId?: string;
   pwaAppName?: string;
   mobileKeyboardMode?: 'native' | 'resize-content';
+  draftStarters?: DraftStarterRef[];
 
   [key: string]: unknown;
 }
@@ -669,6 +716,10 @@ export interface NotificationPayload {
   body?: string;
 
   tag?: string;
+  kind?: string;
+  sessionId?: string;
+  directory?: string;
+  requireHidden?: boolean;
 }
 
 export interface NotificationsAPI {
@@ -699,6 +750,9 @@ export interface VSCodeAPI {
   executeCommand(command: string, ...args: unknown[]): Promise<unknown>;
   openAgentManager(): Promise<void>;
   openExternalUrl(url: string): Promise<void>;
+  pickFiles?(): Promise<unknown>;
+  saveImage?(payload: unknown): Promise<unknown>;
+  saveMarkdown?(payload: unknown): Promise<unknown>;
 }
 
 export interface PushSubscribePayload {
@@ -1028,6 +1082,37 @@ export interface GitHubAPI {
   repoBranches(owner: string, repo: string): Promise<string[]>;
 }
 
+export interface RemoteClientRecord {
+  id: string;
+  label: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  expiresAt?: string | null;
+  clientKind?: string | null;
+}
+
+export interface RemoteClientCreateResult {
+  client: RemoteClientRecord;
+  token: string;
+}
+
+export interface RemoteClientRevokeResult {
+  revoked: boolean;
+  client?: RemoteClientRecord;
+}
+
+export interface RemoteClientPurgeRevokedResult {
+  purged: number;
+}
+
+export interface ClientAuthAPI {
+  listClients(): Promise<RemoteClientRecord[]>;
+  createClient(input?: { label?: string }): Promise<RemoteClientCreateResult>;
+  purgeRevokedClients(): Promise<RemoteClientPurgeRevokedResult>;
+  revokeClient(id: string): Promise<RemoteClientRevokeResult>;
+}
+
 export interface RuntimeAPIs {
   runtime: RuntimeDescriptor;
   terminal: TerminalAPI;
@@ -1039,6 +1124,7 @@ export interface RuntimeAPIs {
   github?: GitHubAPI;
   push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
+  clientAuth?: ClientAuthAPI;
   tools: ToolsAPI;
   editor?: EditorAPI;
   vscode?: VSCodeAPI;
