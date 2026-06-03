@@ -37,7 +37,7 @@ const SettingsView = lazyWithChunkRecovery(() => import('@/components/views/Sett
 const SettingsWindow = lazyWithChunkRecovery(() => import('@/components/views/SettingsWindow').then(m => ({ default: m.SettingsWindow })));
 const MultiRunWindow = lazyWithChunkRecovery(() => import('@/components/views/MultiRunWindow').then(m => ({ default: m.MultiRunWindow })));
 
-const DESKTOP_SIDEBAR_MIN_WIDTH = 280;
+const DESKTOP_SIDEBAR_MIN_WIDTH = 160;
 const DESKTOP_SIDEBAR_MAX_WIDTH = 500;
 const DESKTOP_RIGHT_SIDEBAR_MIN_WIDTH = 300;
 const DESKTOP_RIGHT_SIDEBAR_MAX_WIDTH = 860;

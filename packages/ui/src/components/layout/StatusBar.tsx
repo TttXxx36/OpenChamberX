@@ -91,7 +91,7 @@ export const StatusBar: React.FC = () => {
   return (
     <div
       className={
-        'flex h-7 items-center justify-between bg-sidebar ' +
+        'flex h-6 items-center justify-between bg-sidebar ' +
         'px-3 text-[11px] text-muted-foreground select-none shrink-0 ' +
         'border-t border-border/50'
       }

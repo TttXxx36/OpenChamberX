@@ -96,7 +96,7 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
 
   return (
     <div
-      className="absolute right-[18px] inset-y-0 z-10 w-[20px] flex flex-col items-center justify-center gap-[5px] opacity-30 hover:opacity-80 transition-opacity duration-200 py-1 pointer-events-none"
+      className="absolute right-[18px] inset-y-0 z-20 w-[20px] flex flex-col items-center justify-center gap-[5px] opacity-30 hover:opacity-80 transition-opacity duration-200 py-1 pointer-events-none"
     >
       {userMessages.map((msg) => {
         const messageId = String(msg.info.id);
@@ -115,7 +115,17 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
                 ? 'bg-[var(--primary)] h-[5px] opacity-100 shadow-sm'
                 : 'bg-[var(--muted-foreground)] opacity-60 hover:opacity-80 hover:h-[4px]',
             )}
-            onClick={() => messageListRef.current?.scrollToMessageId(messageId, { behavior: 'smooth' })}
+            onClick={() => {
+              const container = scrollContainerRef.current;
+              if (container) {
+                const el = container.querySelector(`[data-message-id="${messageId}"]`);
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  return;
+                }
+              }
+              messageListRef.current?.scrollToMessageId(messageId, { behavior: 'smooth' });
+            }}
             aria-label={`Go to message ${messageId}`}
           />
         );
