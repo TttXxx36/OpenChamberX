@@ -1,0 +1,66 @@
+# ============================================
+# OpenChamberX 上游同步保护路径配置
+# ============================================
+# 每行一个 glob 模式（git 风格）。
+# 注释以 # 开头。
+# 空白行忽略。
+#
+# 这些文件/目录会在 sync-upstream workflow 中被识别为
+# "保留区"，遇到上游冲突时默认采用 fork 本地版本。
+#
+# 你可以编辑此文件来调整保护范围。
+# 路径以 / 开头表示相对仓库根目录的绝对路径。
+# 路径以 * 或目录/ 结尾表示 glob 通配。
+# ============================================
+
+# ---------- GitHub Actions（8 个自定义 workflow，fork 独有） ----------
+.github/workflows/
+
+# ---------- 包管理与依赖（6 个 package.json + lock） ----------
+package.json
+/package.json
+/packages/*/package.json
+/bun.lock
+/bun.lockb
+
+# ---------- 构建与项目配置 ----------
+/fix-deprecation.js
+/tsconfig.json
+/vite.config.ts
+/vite-theme-plugin.ts
+/postcss.config.js
+/components.json
+
+# ---------- 文档（fork 自定义） ----------
+/README.md
+/CHANGELOG.md
+/AGENTS.md
+/CONTRIBUTING.md
+/SECURITY.md
+/docs/
+
+# ---------- 工具与开发配置 ----------
+/.opencode/
+/.codegraph/
+/.agents/                  # 上游有，fork 已删除 —— 显式列出以防误同步回来
+
+# ---------- 源码层（fork 独有的功能与重构） ----------
+# UI Store 拆分
+/packages/*/src/store/useUIStore.*
+/packages/*/src/store/useNotificationStore.*
+
+# 错误处理统一
+/packages/*/src/lib/formatSdkError.*
+/packages/*/src/lib/event-reducer.*
+/packages/*/src/store/session-actions.*
+
+# 多语言扩展（fork 在 7 种语言中加了 sessionRename 的 emptyTitle/error 键）
+/packages/*/src/i18n/
+
+# Electron 桌面端安全网
+/packages/*/electron/main.*
+/packages/*/electron/preload.*
+
+# ---------- PR/Issue 模板 ----------
+/.github/CODEOWNERS
+/.github/ISSUE_TEMPLATE/
