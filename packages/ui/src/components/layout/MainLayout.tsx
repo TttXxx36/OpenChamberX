@@ -39,8 +39,8 @@ const MultiRunWindow = lazyWithChunkRecovery(() => import('@/components/views/Mu
 
 const DESKTOP_SIDEBAR_MIN_WIDTH = 280;
 const DESKTOP_SIDEBAR_MAX_WIDTH = 500;
-const DESKTOP_RIGHT_SIDEBAR_MIN_WIDTH = 720;
-const DESKTOP_RIGHT_SIDEBAR_MAX_WIDTH = 1200;
+const DESKTOP_RIGHT_SIDEBAR_MIN_WIDTH = 300;
+const DESKTOP_RIGHT_SIDEBAR_MAX_WIDTH = 860;
 
 export const MainLayout: React.FC = () => {
     const RIGHT_SIDEBAR_AUTO_CLOSE_WIDTH = 1140;

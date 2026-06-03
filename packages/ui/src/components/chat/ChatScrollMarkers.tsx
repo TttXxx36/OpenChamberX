@@ -96,7 +96,7 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
 
   return (
     <div
-      className="absolute right-[18px] inset-y-0 z-10 w-[10px] flex flex-col items-center justify-center gap-[5px] opacity-30 hover:opacity-80 transition-opacity duration-200 py-1 pointer-events-none"
+      className="absolute right-[18px] inset-y-0 z-10 w-[20px] flex flex-col items-center justify-center gap-[5px] opacity-30 hover:opacity-80 transition-opacity duration-200 py-1 pointer-events-none"
     >
       {userMessages.map((msg) => {
         const messageId = String(msg.info.id);
@@ -109,7 +109,7 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
             data-user-message-marker={messageId}
             title={previews.get(messageId) ?? ''}
             className={cn(
-              'w-[8px] mx-auto h-[3px] rounded-full cursor-pointer border-none p-0 m-0',
+              'w-[16px] mx-auto h-[3px] rounded-full cursor-pointer border-none p-0 m-0',
               'transition-all duration-150 shrink-0 pointer-events-auto',
               isActive
                 ? 'bg-[var(--primary)] h-[5px] opacity-100 shadow-sm'
