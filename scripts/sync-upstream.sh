@@ -56,11 +56,19 @@ else
   log "Manual target: $TARGET_REF"
 fi
 
-TARGET_SHA=$(git rev-parse "upstream/${TARGET_REF}^{commit}" 2>/dev/null \
+# 解析 target SHA（多重 fallback，兼容 tag / branch / remote-tracking 三种形式）
+# 注意：fetch --tags 后 tag 位于 refs/tags/v1.12.0 和 refs/remotes/upstream/v1.12.0 (remote branch 命名空间)
+# 但 upstream/v1.12.0 这种简写会被 git 解析成 remote branch，找不到 tag
+TARGET_SHA=$(git rev-parse "refs/tags/${TARGET_REF}^{commit}" 2>/dev/null \
+  || git rev-parse "refs/tags/${TARGET_REF}" 2>/dev/null \
+  || git rev-parse "v${TARGET_REF#v}^{commit}" 2>/dev/null \
+  || git rev-parse "${TARGET_REF}^{commit}" 2>/dev/null \
+  || git rev-parse "${TARGET_REF}" 2>/dev/null \
+  || git rev-parse "upstream/${TARGET_REF}^{commit}" 2>/dev/null \
   || git rev-parse "upstream/${TARGET_REF}" 2>/dev/null \
-  || { err "Cannot resolve upstream/${TARGET_REF}"; exit 1; })
+  || { err "Cannot resolve ${TARGET_REF}"; exit 1; })
 SHORT_SHA="${TARGET_SHA:0:7}"
-ok "Targeting upstream/${TARGET_REF} @ ${SHORT_SHA}"
+ok "Targeting ${TARGET_REF} @ ${SHORT_SHA}"
 
 # ---------- 3. 检查是否已同步 ----------
 if git merge-base --is-ancestor "$TARGET_SHA" main; then
