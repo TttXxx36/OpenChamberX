@@ -4,17 +4,13 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Icon } from '@/components/icon/Icon';
 import { useUIStore } from '@/stores/useUIStore';
+import { useI18n } from '@/lib/i18n';
 import type { LayoutPreset } from '@/stores/useUIStore';
 
 const DEFAULT_PRESET_NAMES = new Set(['Full', 'Minimal', 'Review']);
 
-const PRESET_LABELS: Record<string, string> = {
-  'Full': '完整',
-  'Minimal': '极简',
-  'Review': '审查',
-};
-
 export const LayoutPage: React.FC = () => {
+  const { t } = useI18n();
   const layoutPresets = useUIStore((state) => state.layoutPresets);
   const saveCurrentLayoutPreset = useUIStore((state) => state.saveCurrentLayoutPreset);
   const loadLayoutPreset = useUIStore((state) => state.loadLayoutPreset);
@@ -45,21 +41,21 @@ export const LayoutPage: React.FC = () => {
     <div>
       <div className="mb-1 px-1">
         <h3 className="typography-ui-header font-medium text-foreground">
-          布局预设
+          {t('layout.presets.title')}
         </h3>
         <p className="typography-meta text-muted-foreground mt-1">
-          保存和恢复面板布局配置。
+          {t('layout.presets.description')}
         </p>
       </div>
 
       {/* Status bar visibility toggle */}
       <section className="px-2 pb-4">
         <div className="flex items-center justify-between rounded-md border border-border bg-[var(--surface-elevated)] px-3 py-2">
-          <span className="typography-ui-label text-foreground">显示状态栏</span>
+          <span className="typography-ui-label text-foreground">{t('layout.presets.showStatusBar')}</span>
           <Switch
             checked={isStatusBarVisible}
             onCheckedChange={setStatusBarVisible}
-            aria-label="切换状态栏可见性"
+            aria-label={t('layout.presets.showStatusBarAria')}
           />
         </div>
       </section>
@@ -71,8 +67,8 @@ export const LayoutPage: React.FC = () => {
             value={inputName}
             onChange={(e) => setInputName(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="预设名称…"
-            aria-label="布局预设名称"
+            placeholder={t('layout.presets.presetNamePlaceholder')}
+            aria-label={t('layout.presets.title')}
             className="w-full sm:w-64"
           />
           <Button
@@ -84,7 +80,7 @@ export const LayoutPage: React.FC = () => {
             className="!font-normal"
           >
             <Icon name="save-3" className="h-3.5 w-3.5 mr-1" />
-            保存当前布局
+            {t('layout.presets.saveCurrentLayout')}
           </Button>
         </div>
       </section>
@@ -102,7 +98,7 @@ export const LayoutPage: React.FC = () => {
         ))}
         {layoutPresets.length === 0 && (
           <p className="typography-meta text-muted-foreground py-4 text-center">
-            暂无已保存的预设。在上方输入名称并点击"保存当前布局"。
+            {t('layout.presets.empty')}
           </p>
         )}
       </section>
@@ -118,14 +114,20 @@ interface PresetRowProps {
 }
 
 const PresetRow: React.FC<PresetRowProps> = ({ preset, isDefault, onLoad, onDelete }) => {
+  const { t } = useI18n();
+
+  const presetLabel = isDefault
+    ? ({ Full: t('layout.presets.presetFull'), Minimal: t('layout.presets.presetMinimal'), Review: t('layout.presets.presetReview') })[preset.name]
+    : preset.name;
+
   return (
     <div className="flex items-center justify-between rounded-md border border-border bg-[var(--surface-elevated)] px-3 py-2">
       <div className="flex items-center gap-2 min-w-0">
         <Icon name="layout-column" className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="typography-ui-label text-foreground truncate">{PRESET_LABELS[preset.name] || preset.name}</span>
+        <span className="typography-ui-label text-foreground truncate">{presetLabel}</span>
         {isDefault && (
           <span className="typography-micro px-1 rounded leading-none pb-px text-[var(--status-muted)] bg-[var(--surface-dim)] shrink-0">
-            默认
+            {t('layout.presets.default')}
           </span>
         )}
       </div>
@@ -137,7 +139,7 @@ const PresetRow: React.FC<PresetRowProps> = ({ preset, isDefault, onLoad, onDele
           onClick={() => onLoad(preset.name)}
           className="!font-normal"
         >
-          加载
+          {t('layout.presets.load')}
         </Button>
         {!isDefault && (
           <Button
@@ -146,7 +148,7 @@ const PresetRow: React.FC<PresetRowProps> = ({ preset, isDefault, onLoad, onDele
             size="xs"
             onClick={() => onDelete(preset.name)}
             className="!font-normal text-muted-foreground hover:text-foreground"
-            aria-label={`删除预设"${preset.name}"`}
+            aria-label={t('layout.presets.deleteAria', { name: preset.name })}
           >
             <Icon name="delete-bin" className="h-3.5 w-3.5" />
           </Button>

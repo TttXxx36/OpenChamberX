@@ -917,7 +917,7 @@ export const useUIStore = create<UIStore>()(
         userMessageRenderingMode: 'markdown',
         stickyUserHeader: true,
         showSplitAssistantMessageActions: false,
-        isStatusBarVisible: true,
+        isStatusBarVisible: false,
         showMobileSessionStatusBar: true,
         isMobileSessionStatusBarCollapsed: false,
         mobileSessionPanelOpen: false,

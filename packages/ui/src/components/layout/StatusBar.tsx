@@ -27,9 +27,15 @@ export const StatusBar: React.FC = () => {
   /* ── Agent name ─────────────────────────────────────────── */
   const currentAgentName = useConfigStore((state) => state.currentAgentName);
 
-  /* ── Current model ──────────────────────────────────────── */
-  const getCurrentModel = useConfigStore((state) => state.getCurrentModel);
-  const currentModel = getCurrentModel();
+  /* ── Current model (reactive: re-renders when model changes) ─── */
+  const currentProviderId = useConfigStore((state) => state.currentProviderId);
+  const currentModelId = useConfigStore((state) => state.currentModelId);
+  const providers = useConfigStore((state) => state.providers);
+  const currentModel = React.useMemo(() => {
+    const provider = providers.find((p) => p.id === currentProviderId);
+    if (!provider) return undefined;
+    return provider.models.find((m) => m.id === currentModelId);
+  }, [providers, currentProviderId, currentModelId]);
   const modelName = currentModel?.name ?? currentModel?.id ?? '';
 
   /* ── Connection status ──────────────────────────────────── */
