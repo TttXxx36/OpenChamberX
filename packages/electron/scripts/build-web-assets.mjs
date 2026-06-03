@@ -14,8 +14,17 @@ const resourcesDir = path.join(electronDir, 'resources');
 const resourcesWebDistDir = path.join(resourcesDir, 'web-dist');
 const webDistDir = path.join(webDir, 'dist');
 
+const quoteWindowsCommandArg = (value) => `"${String(value).replace(/"/g, '""')}"`;
+
 const run = (cmd, args, cwd) => {
-  const result = spawnSync(cmd, args, { cwd, stdio: 'inherit' });
+  const isWindowsCommandScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
+  const result = isWindowsCommandScript
+    ? spawnSync(
+        process.env.ComSpec || 'cmd.exe',
+        ['/d', '/s', '/c', ['call', quoteWindowsCommandArg(cmd), ...args.map(quoteWindowsCommandArg)].join(' ')],
+        { cwd, stdio: 'inherit', windowsVerbatimArguments: true },
+      )
+    : spawnSync(cmd, args, { cwd, stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error(`Command failed: ${cmd} ${args.join(' ')}`);

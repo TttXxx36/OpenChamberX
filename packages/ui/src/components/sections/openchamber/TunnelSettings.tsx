@@ -1,6 +1,7 @@
 import React from 'react';
 import QRCode from 'qrcode';
 import { toast } from '@/components/ui';
+import { runtimeFetch } from '@/lib/runtime-fetch';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { openExternalUrl } from '@/lib/url';
+import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 
 type TunnelState =
   | 'checking'
@@ -149,16 +151,20 @@ const getProviderLabel = (provider: string): string => {
   if (provider === 'cloudflare') {
     return 'Cloudflare';
   }
+  if (provider === 'ngrok') {
+    return 'Ngrok';
+  }
   return provider;
 };
 
 const ProviderOptionLabel: React.FC<{ provider: string }> = ({ provider }) => {
   const label = getProviderLabel(provider);
   const isCloudflare = provider === 'cloudflare';
+  const isNgrok = provider === 'ngrok';
 
   return (
     <span className="flex items-center gap-2">
-      <Icon name="cloud" className={cn('size-4 shrink-0', isCloudflare ? 'text-[var(--status-warning)]' : 'text-muted-foreground')} />
+      <Icon name="cloud" className={cn('size-4 shrink-0', isCloudflare || isNgrok ? 'text-[var(--status-warning)]' : 'text-muted-foreground')} />
       <span>{label}</span>
     </span>
   );
@@ -180,6 +186,11 @@ const toUiTunnelMode = (mode: string | null | undefined): TunnelMode => {
 const ttlOptionValue = (options: TtlOption[], ttlMs: number | null, fallback: string) => {
   const matched = options.find((entry) => entry.ms === ttlMs);
   return matched?.value || fallback;
+};
+
+const ttlOptionLabel = (options: TtlOption[], ttlMs: number | null, fallback: string) => {
+  const value = ttlOptionValue(options, ttlMs, fallback);
+  return options.find((entry) => entry.value === value)?.label || value;
 };
 
 const formatRemaining = (remainingMs: number): string => {
@@ -355,12 +366,40 @@ export const TunnelSettings: React.FC = () => {
     if (typeof window === 'undefined') {
       return null;
     }
-    const parsed = Number(window.location.port);
+    const runtimeApiBaseUrl = getRuntimeApiBaseUrl();
+    const portSource = runtimeApiBaseUrl || window.location.href;
+    let parsed = 0;
+    try {
+      parsed = Number(new URL(portSource).port);
+    } catch {
+      parsed = Number(window.location.port);
+    }
     if (Number.isFinite(parsed) && parsed > 0) {
       return parsed;
     }
     return null;
   }, [localPort]);
+  const selectedProviderCapability = React.useMemo(() => {
+    return providerCapabilities.find((capability) => capability.provider === tunnelProvider) ?? null;
+  }, [providerCapabilities, tunnelProvider]);
+  const tunnelModeOptions = React.useMemo(() => {
+    const supportedModes = new Set(
+      selectedProviderCapability?.modes
+        ?.map((mode) => mode.key)
+        .filter((mode): mode is TunnelMode => mode === 'quick' || mode === 'managed-remote' || mode === 'managed-local')
+    );
+    if (supportedModes.size === 0) {
+      return TUNNEL_MODE_OPTIONS;
+    }
+    return TUNNEL_MODE_OPTIONS.filter((option) => supportedModes.has(option.value));
+  }, [selectedProviderCapability]);
+  const providerSupportsManagedModes = React.useMemo(
+    () => tunnelModeOptions.some((option) => option.value === 'managed-remote' || option.value === 'managed-local'),
+    [tunnelModeOptions],
+  );
+  const installCommand = tunnelProvider === 'ngrok'
+    ? 'brew install ngrok'
+    : 'brew install cloudflared';
   const openExternal = React.useCallback(async (url: string) => {
     await openExternalUrl(url);
   }, []);
@@ -368,10 +407,10 @@ export const TunnelSettings: React.FC = () => {
   const checkAvailabilityAndStatus = React.useCallback(async (signal: AbortSignal) => {
     try {
       const [checkRes, statusRes, settingsRes, providersRes] = await Promise.all([
-        fetch('/api/openchamber/tunnel/check', { signal }),
-        fetch('/api/openchamber/tunnel/status', { signal }),
-        fetch('/api/config/settings', { signal, headers: { Accept: 'application/json' } }),
-        fetch('/api/openchamber/tunnel/providers', { signal }),
+        runtimeFetch('/api/openchamber/tunnel/check', { signal }),
+        runtimeFetch('/api/openchamber/tunnel/status', { signal }),
+        runtimeFetch('/api/config/settings', { signal, headers: { Accept: 'application/json' } }),
+        runtimeFetch('/api/openchamber/tunnel/providers', { signal }),
       ]);
 
       const checkData = await checkRes.json();
@@ -584,7 +623,7 @@ export const TunnelSettings: React.FC = () => {
     let cancelled = false;
     const refreshSessions = async () => {
       try {
-        const statusRes = await fetch('/api/openchamber/tunnel/status');
+        const statusRes = await runtimeFetch('/api/openchamber/tunnel/status');
         if (!statusRes.ok || cancelled) {
           return;
         }
@@ -691,8 +730,12 @@ export const TunnelSettings: React.FC = () => {
   const handleProviderChange = React.useCallback(async (provider: string) => {
     setManagedRemoteValidationError(null);
     setErrorMessage(null);
-    await saveTunnelSettings({ tunnelProvider: provider });
-  }, [saveTunnelSettings]);
+    const capability = providerCapabilities.find((entry) => entry.provider === provider);
+    const defaultMode = capability?.modes?.some((mode) => mode.key === tunnelMode)
+      ? tunnelMode
+      : toUiTunnelMode(capability?.modes?.[0]?.key);
+    await saveTunnelSettings({ tunnelProvider: provider, tunnelMode: defaultMode });
+  }, [providerCapabilities, saveTunnelSettings, tunnelMode]);
 
   const handleBrowseManagedLocalConfig = React.useCallback(async () => {
     const result = await requestFileAccess({
@@ -784,7 +827,7 @@ export const TunnelSettings: React.FC = () => {
         });
       }
 
-      const res = await fetch('/api/openchamber/tunnel/start', {
+      const res = await runtimeFetch('/api/openchamber/tunnel/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -879,8 +922,8 @@ export const TunnelSettings: React.FC = () => {
     setState('stopping');
 
     try {
-      await fetch('/api/openchamber/tunnel/stop', { method: 'POST' });
-      const statusRes = await fetch('/api/openchamber/tunnel/status');
+      await runtimeFetch('/api/openchamber/tunnel/stop', { method: 'POST' });
+      const statusRes = await runtimeFetch('/api/openchamber/tunnel/status');
       if (statusRes.ok) {
         const statusData = (await statusRes.json()) as TunnelStatusResponse;
         setSessionRecords(Array.isArray(statusData.activeSessions) ? statusData.activeSessions : []);
@@ -1146,17 +1189,17 @@ export const TunnelSettings: React.FC = () => {
           <div className="flex items-start gap-2 rounded-lg border border-[var(--status-warning)]/30 bg-[var(--status-warning)]/5 p-3">
             <Icon name="error-warning" className="mt-0.5 size-4 shrink-0 text-[var(--status-warning)]" />
             <div className="space-y-1">
-              <p className="typography-meta font-medium text-foreground">{t('settings.openchamber.tunnel.notAvailable.cloudflaredNotFound')}</p>
+              <p className="typography-meta font-medium text-foreground">{getProviderLabel(tunnelProvider)} tunnel dependency was not found.</p>
               <p className="typography-meta text-muted-foreground/70">{t('settings.openchamber.tunnel.notAvailable.installHint')}</p>
               <code className="typography-code block rounded bg-muted/50 px-2 py-1 text-xs text-foreground">
-                brew install cloudflared
+                {installCommand}
               </code>
             </div>
           </div>
         </section>
       )}
 
-      {state !== 'not-available' && (
+      {(
         <section className="space-y-4 px-2 pb-2 pt-0">
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -1193,7 +1236,7 @@ export const TunnelSettings: React.FC = () => {
             <div className="space-y-1.5">
               <p className="typography-ui-label text-foreground">{t('settings.openchamber.tunnel.field.tunnelType')}</p>
               <div className="flex flex-wrap items-center gap-1">
-                {TUNNEL_MODE_OPTIONS.map((option) => (
+                {tunnelModeOptions.map((option) => (
                   <Tooltip key={option.value}>
                     <TooltipTrigger asChild>
                       <Button
@@ -1229,7 +1272,9 @@ export const TunnelSettings: React.FC = () => {
                 disabled={isSavingTtl || isSavingMode || state === 'starting' || state === 'stopping'}
               >
                 <SelectTrigger className="max-w-[11rem] min-w-0">
-                  <SelectValue className="truncate" />
+                  <SelectValue className="truncate">
+                    {ttlOptionLabel(BOOTSTRAP_TTL_OPTIONS, bootstrapTtlMs, '1800000')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {BOOTSTRAP_TTL_OPTIONS.map((option) => (
@@ -1249,7 +1294,9 @@ export const TunnelSettings: React.FC = () => {
                 disabled={isSavingTtl || isSavingMode || state === 'starting' || state === 'stopping'}
               >
                 <SelectTrigger className="max-w-[11rem] min-w-0">
-                  <SelectValue className="truncate" />
+                  <SelectValue className="truncate">
+                    {ttlOptionLabel(SESSION_TTL_OPTIONS, sessionTtlMs, '28800000')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {SESSION_TTL_OPTIONS.map((option) => (
@@ -1268,9 +1315,11 @@ export const TunnelSettings: React.FC = () => {
                   <p className="typography-meta text-[var(--status-warning)]">
                     {t('settings.openchamber.tunnel.option.mode.quick.tooltip')}
                   </p>
-                  <p className="typography-meta mt-1 text-[var(--status-warning)]">
-                    {t('settings.openchamber.tunnel.warning.quickModeReliability')}
-                  </p>
+                  {providerSupportsManagedModes && (
+                    <p className="typography-meta mt-1 text-[var(--status-warning)]">
+                      {t('settings.openchamber.tunnel.warning.quickModeReliability')}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

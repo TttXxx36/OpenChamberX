@@ -1,3 +1,23 @@
+## [1.12.0] - 2026-06-03
+
+- Chat: added customizable draft welcome starters from commands and skills, including guided commands for catch-up, debugging, exploration, and approach comparison.
+- Chat: assistant answers now have a dialog for starting a new session from that answer.
+- Chat/Input: queued messages no longer auto-send before the active session is ready, and thinking-variant choices are preserved for generated messages.
+- Chat/UI: markdown-rendered user messages now preserve line breaks.
+- UI/Theming: chat colors now map more closely to the active editor theme, and the session UI has been refined.
+- Reliability/Startup: Restart API Connection now uses the same loading and reload flow as startup.
+
+## [1.11.7] - 2026-05-27
+
+- Chat/Input: selecting an agent now switches to that agent's configured model, and malformed tool diffs no longer break chat rendering (thanks to @Adrian-Eckardt).
+- Usage: added a setting to hide prediction rows on usage cards (thanks to @ermanhavuc).
+- Reliability/Streaming: restored live streaming in the extension.
+
+## [1.11.6] - 2026-05-25
+
+- Settings/Plugins: added a Plugins page for managing opencode plugins, with npm update checks and user/project scopes (thanks to @Quat3rnion).
+- Perf: Git repository lookups in the extension now avoid repeating the same Git read commands during refreshes.
+
 ## [1.11.5] - 2026-05-25
 
 - Chat/Input: pending image attachments now show previews, sent image attachments can be cited from assistant messages, and markdown source mode highlights formatting while you type.

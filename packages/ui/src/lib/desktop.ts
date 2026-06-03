@@ -1,5 +1,9 @@
 import type { ProjectEntry } from '@/lib/api/types';
+import { getInjectedBootOutcome } from '@/lib/desktopBoot';
+import type { DraftStarterRef } from '@/lib/draftStarters';
 import type { MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
+import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
+import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
 export type AssistantNotificationPayload = {
   title?: string;
@@ -52,6 +56,7 @@ export type DesktopSettings = {
   // Optional absolute path to `opencode` binary.
   opencodeBinary?: string;
   desktopLanAccessEnabled?: boolean;
+  desktopUiPassword?: string;
   projects?: ProjectEntry[];
   activeProjectId?: string;
   approvedDirectories?: string[];
@@ -86,6 +91,7 @@ export type DesktopSettings = {
   usageAutoRefresh?: boolean;
   usageRefreshIntervalMs?: number;
   usageDisplayMode?: 'usage' | 'remaining';
+  usageShowPredValues?: boolean;
   usageDropdownProviders?: string[];
   usageSelectedModels?: Record<string, string[]>;  // Map of providerId -> selected model names
   usageCollapsedFamilies?: Record<string, string[]>;  // Map of providerId -> collapsed family IDs (UsagePage)
@@ -175,6 +181,8 @@ export type DesktopSettings = {
   sttSilenceThresholdDb?: number;
   sttSilenceHoldMs?: number;
   sttTranscribeOnStop?: boolean;
+  // Global draft welcome starters (pinned commands/skills), persisted to settings.json
+  draftStarters?: DraftStarterRef[];
 };
 
 type TauriGlobal = {
@@ -224,6 +232,45 @@ export const invokeDesktop = async <T = unknown>(command: string, args?: Record<
   return tauri.core.invoke(command, args ?? {}) as Promise<T>;
 };
 
+type LaunchAtLoginStatus = {
+  supported: boolean;
+  enabled: boolean;
+};
+
+export const getDesktopLaunchAtLogin = async (): Promise<LaunchAtLoginStatus | null> => {
+  if (!canUseElectronDesktopIPC() || !isDesktopLocalOriginActive()) {
+    return null;
+  }
+
+  try {
+    const result = await invokeDesktop<LaunchAtLoginStatus>('desktop_get_launch_at_login');
+    if (!result || typeof result.supported !== 'boolean' || typeof result.enabled !== 'boolean') {
+      return null;
+    }
+    return result;
+  } catch (error) {
+    console.warn('Failed to get launch at login status', error);
+    return null;
+  }
+};
+
+export const setDesktopLaunchAtLogin = async (enabled: boolean): Promise<LaunchAtLoginStatus | null> => {
+  if (!canUseElectronDesktopIPC() || !isDesktopLocalOriginActive()) {
+    return null;
+  }
+
+  try {
+    const result = await invokeDesktop<LaunchAtLoginStatus>('desktop_set_launch_at_login', { enabled });
+    if (!result || typeof result.supported !== 'boolean' || typeof result.enabled !== 'boolean') {
+      return null;
+    }
+    return result;
+  } catch (error) {
+    console.warn('Failed to set launch at login status', error);
+    return null;
+  }
+};
+
 const normalizeOrigin = (raw: string): string | null => {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -263,8 +310,34 @@ export const isDesktopLocalOriginActive = (): boolean => {
   if (typeof window === 'undefined') return false;
   if (!isDesktopShell()) return false;
 
+  if (getRuntimeKey() === 'local') {
+    return true;
+  }
+
   const local = typeof window.__OPENCHAMBER_LOCAL_ORIGIN__ === 'string' ? window.__OPENCHAMBER_LOCAL_ORIGIN__ : '';
   const localUrl = parseUrl(local);
+  const runtimeApiUrl = parseUrl(getRuntimeApiBaseUrl());
+
+  if (!runtimeApiUrl && localUrl && getInjectedBootOutcome()?.target === 'local') {
+    return true;
+  }
+
+  if (localUrl && runtimeApiUrl) {
+    if (localUrl.origin === runtimeApiUrl.origin) {
+      return true;
+    }
+
+    const localPort = localUrl.port || (localUrl.protocol === 'https:' ? '443' : '80');
+    const runtimePort = runtimeApiUrl.port || (runtimeApiUrl.protocol === 'https:' ? '443' : '80');
+
+    return (
+      localUrl.protocol === runtimeApiUrl.protocol &&
+      localPort === runtimePort &&
+      isLoopbackHost(localUrl.hostname) &&
+      isLoopbackHost(runtimeApiUrl.hostname)
+    );
+  }
+
   const currentUrl = parseUrl(window.location.origin);
 
   if (localUrl && currentUrl) {
@@ -313,14 +386,12 @@ export const startDesktopWindowDrag = async (): Promise<boolean> => {
 };
 
 export const isVSCodeRuntime = (): boolean => {
-  if (typeof window === "undefined") return false;
-  const apis = (window as { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: { isVSCode?: boolean } } }).__OPENCHAMBER_RUNTIME_APIS__;
+  const apis = getRegisteredRuntimeAPIs();
   return apis?.runtime?.isVSCode === true;
 };
 
 export const isWebRuntime = (): boolean => {
-  if (typeof window === "undefined") return false;
-  const apis = (window as { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: { platform?: string } } }).__OPENCHAMBER_RUNTIME_APIS__;
+  const apis = getRegisteredRuntimeAPIs();
   const platform = apis?.runtime?.platform;
   if (platform === 'web') {
     return true;
@@ -432,7 +503,7 @@ export const sendAssistantCompletionNotification = async (
 };
 
 export const checkForDesktopUpdates = async (): Promise<UpdateInfo | null> => {
-  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+  if (!isTauriShell()) {
     return null;
   }
 
@@ -449,7 +520,7 @@ export const checkForDesktopUpdates = async (): Promise<UpdateInfo | null> => {
 export const downloadDesktopUpdate = async (
   onProgress?: (progress: UpdateProgress) => void
 ): Promise<boolean> => {
-  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+  if (!isTauriShell()) {
     return false;
   }
 
@@ -509,7 +580,7 @@ export const downloadDesktopUpdate = async (
 };
 
 export const restartToApplyUpdate = async (): Promise<boolean> => {
-  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+  if (!isTauriShell()) {
     return false;
   }
 

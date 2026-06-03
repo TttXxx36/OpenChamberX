@@ -5,6 +5,7 @@
 [![Created with OpenCode](docs/references/badges/created-with-opencode.svg)](https://opencode.ai)
 
 
+
 ## **OpenCode, everywhere.** Desktop. Browser. Phone.
 
 ### A rich interface for [OpenCode](https://opencode.ai). Review diffs, manage agents, run dev servers, and keep the big picture while your AI codes.
@@ -103,7 +104,12 @@ openchamber --ui-password be-creative-here
 
 ```bash
 openchamber --port 8080              # Custom port
+openchamber --lan --port 3000        # Listen on LAN (0.0.0.0)
 openchamber --ui-password secret     # Password-protect UI
+openchamber startup enable           # Start at login as a native service
+OPENCHAMBER_UI_PASSWORD=secret openchamber startup enable # Save service password env
+openchamber startup status           # Show startup service status
+openchamber startup disable          # Remove startup service
 openchamber tunnel help              # Tunnel lifecycle commands
 openchamber tunnel providers         # Show provider capabilities
 openchamber tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token <token>
@@ -112,12 +118,17 @@ openchamber tunnel start --provider cloudflare --mode quick --qr
 openchamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
 openchamber tunnel status --all      # Show tunnel state across instances
 openchamber tunnel stop --port 3000  # Stop tunnel only (server stays running)
+openchamber connect-url --port 3000  # Add this server to OpenChamber Desktop
+openchamber connect-url --server http://host:3000 --qr
+openchamber connect-url --port 3000 --qr
 openchamber logs                     # Follow latest instance logs
 OPENCODE_PORT=4096 OPENCODE_SKIP_START=true openchamber                    # Connect to external OpenCode server
 OPENCODE_HOST=https://myhost:4096 OPENCODE_SKIP_START=true openchamber  # Connect via custom host/HTTPS
 openchamber stop                     # Stop server
 openchamber update                   # Update to latest
 ```
+
+`startup enable` snapshots your current environment into the native service so startup behaves like you launched `openchamber` from the same shell. This preserves provider tokens, PATH, SSH agent settings, and other CLI auth/config env vars. Use `--no-env-snapshot` if you want a minimal service env.
 
 Connect to an existing OpenCode server:
 ```bash
@@ -130,6 +141,29 @@ Bind managed OpenCode server to all interfaces (use only on trusted networks):
 OPENCHAMBER_OPENCODE_HOSTNAME=0.0.0.0 openchamber --port 3000
 ```
 
+Expose OpenChamber itself on your LAN:
+```bash
+openchamber --lan --port 3000 --ui-password secret
+```
+
+Add this server to OpenChamber Desktop or another OpenChamber app:
+```bash
+openchamber connect-url --port 3000 --qr
+```
+
+If no OpenChamber server is running on that port, `connect-url` starts one before generating the link.
+
+Headless/API-only setup for a remote machine:
+```bash
+openchamber connect-url --port 3000 --api-only --lan --server http://your-host-or-ip:3000 --qr --ui-password secret
+```
+
+This runs OpenChamber as an API-only server without the desktop app or browser UI assets on that machine, then creates a link for Desktop to import. `--lan` makes the server reachable from other machines. `--server` is the address Desktop should use.
+
+When OpenChamber was started with `--lan` or `--host 0.0.0.0`, `connect-url` automatically uses a detected LAN IP instead of `127.0.0.1`. Use `--server http://host:3000` to override the advertised address, and include `--lan` when `connect-url` needs to start the server for LAN access.
+
+Paste the printed `openchamber://connect?...` link in Desktop under Settings -> Remote Instances -> Direct Instances -> Import Link. The link contains the server URL and a client token. It does not enable browser UI password protection; use `--ui-password` when exposing a server beyond localhost.
+
 </details>
 
 <details>
@@ -140,7 +174,7 @@ dev machine over a VPN (e.g. Tailscale) or LAN without a Cloudflare tunnel.
 
 **How it works:**
 - OpenCode runs as its own service, binding only to `localhost`.
-- OpenChamber connects to it via `OPENCODE_HOST` and `--host 0.0.0.0` makes it reachable on your VPN IP.
+- OpenChamber connects to it via `OPENCODE_HOST` and `--lan` makes it reachable on your VPN IP.
 - `--foreground` keeps the CLI process alive so systemd can track and restart it.
 
 **`~/.config/systemd/user/opencode.service`**

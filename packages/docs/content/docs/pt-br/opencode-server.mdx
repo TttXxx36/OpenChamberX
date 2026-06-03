@@ -44,6 +44,49 @@ openchamber stop
 
 `openchamber` sozinho inicia o servidor em segundo plano. Adicione `--foreground` para mantê-lo anexado ao seu terminal.
 
+## Iniciar o OpenChamber no login
+
+Use `startup enable` para instalar um serviço nativo do usuário. O OpenChamber usa `launchd` no macOS, `systemd --user` no Linux e Task Scheduler no Windows.
+
+```bash
+openchamber startup enable
+openchamber startup status
+openchamber startup disable
+```
+
+Para proteger a UI, defina a senha ao habilitar o serviço:
+
+```bash
+OPENCHAMBER_UI_PASSWORD='secret' openchamber startup enable
+```
+
+Para um servidor headless que inicia no login e é usado por apps desktop ou mobile, inclua `--api-only` e um host acessível:
+
+```bash
+openchamber startup enable --port 3000 --api-only --host 0.0.0.0 --ui-password secret
+```
+
+`startup enable` salva um snapshot do ambiente atual no serviço para que a inicialização se pareça mais com executar `openchamber` na mesma shell. Isso preserva tokens de provedores, `PATH`, configurações do agente SSH e outras variáveis CLI de auth/config. Use `--no-env-snapshot` se quiser um ambiente de serviço mínimo.
+
+O serviço de inicialização lembra `--port`, `--host`, `--ui-password` e `--api-only`. Reinícios pela CLI e reinícios durante atualização reutilizam essas configurações salvas.
+
+Para criar um link de conexão para outro app OpenChamber, use:
+
+```bash
+openchamber connect-url --port 3000 --server http://your-host:3000 --qr
+```
+
+Execute `openchamber connect-url --help` para ver todas as opções de link, incluindo `--name`, `--lan`, `--server`, `--api-only`, `--ui-password` e `--qr`.
+
+Você ainda pode gerenciar túneis de forma independente para esse serviço em execução:
+
+```bash
+openchamber tunnel start --port 3000
+openchamber tunnel stop --port 3000
+```
+
+Parar o túnel não reinicia o serviço nem o app.
+
 ## "OpenCode is restarting"
 
 Enquanto o servidor está iniciando ou reiniciando, o OpenChamber mostra um estado "OpenCode is restarting" e pausa as requisições até ele estar pronto. Isso é normal logo após a inicialização ou um reinício. Se nunca sair desse estado, veja [Conexão com o OpenCode](/pt-br/troubleshooting/opencode-connection/).
