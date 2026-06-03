@@ -1427,7 +1427,7 @@ const AssistantMessageBody = React.memo(({
         && hasAnchoredActivitySegments
         && Boolean(toggleActivityGroup);
 
-    const shouldDeferSortedInlineText = isSortedRenderMode && !hasStopFinish;
+    const shouldDeferSortedInlineText = isSortedRenderMode && !isMessageCompleted;
     const showErrorMessage = Boolean(errorMessage);
     const errorIconName = errorVariant === 'info' ? 'information' : 'error-warning';
     const shouldShowMessageActions = hasCopyableText;

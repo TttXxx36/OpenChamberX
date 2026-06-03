@@ -22,6 +22,50 @@ function getMessagePreview(msg: { info: Message; parts: Part[] }): string {
   return '\uD83D\uDCCE Attachment';
 }
 
+interface MarkerButtonProps {
+  messageId: string;
+  isActive: boolean;
+  preview: string;
+  onClick: (messageId: string) => void;
+}
+
+const MarkerButton: React.FC<MarkerButtonProps> = React.memo(({ messageId, isActive, preview, onClick }) => {
+  return (
+    <button
+      type="button"
+      data-user-message-marker={messageId}
+      title={preview}
+      className={cn(
+        'w-[16px] mx-auto h-[3px] rounded-full cursor-pointer border-none p-0 m-0 shrink-0',
+        'transition-all duration-150',
+        'pointer-events-auto',
+        isActive
+          ? 'bg-[var(--primary)] h-[5px] opacity-100 shadow-sm'
+          : 'bg-[var(--muted-foreground)] opacity-60 hover:opacity-80 hover:h-[4px]',
+      )}
+      onClick={() => onClick(messageId)}
+      aria-label={`Go to message ${messageId}`}
+    />
+  );
+});
+
+MarkerButton.displayName = 'MarkerButton';
+
+function scrollToMessage(
+  messageId: string,
+  container: HTMLDivElement | null,
+  messageListHandle: MessageListHandle | null,
+): void {
+  if (container) {
+    const el = container.querySelector(`[data-message-id="${messageId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+  }
+  messageListHandle?.scrollToMessageId(messageId, { behavior: 'smooth' });
+}
+
 export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
   messages,
   messageListRef,
@@ -41,56 +85,64 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
     return map;
   }, [userMessages]);
 
+  /* Track which user message is closest to the viewport center using IntersectionObserver */
   React.useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || userMessages.length === 0) return;
 
+    const messageIds = userMessages.map((m) => String(m.info.id));
+    const visibleRatios = new Map<string, number>();
     let rafId: number;
-    let prevActiveId: string | null = null;
 
-    const updateActiveMarker = () => {
-      const containerRect = container.getBoundingClientRect();
-      const containerCenter = containerRect.top + containerRect.height / 2;
+    const updateActive = () => {
       let closestId: string | null = null;
-      let closestDistance = Infinity;
-
-      for (const msg of userMessages) {
-        const el = container.querySelector(`[data-message-id="${msg.info.id}"]`);
-        if (!el) continue;
-        const rect = el.getBoundingClientRect();
-        const elCenter = rect.top + rect.height / 2;
-        const dist = Math.abs(elCenter - containerCenter);
-        if (dist < closestDistance) {
-          closestDistance = dist;
-          closestId = String(msg.info.id);
+      let closestDist = Infinity;
+      for (const [id, ratio] of visibleRatios) {
+        const dist = Math.abs(ratio - 0.5);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestId = id;
         }
       }
+      setActiveMessageId(closestId);
+    };
 
-      if (closestId !== prevActiveId) {
-        prevActiveId = closestId;
-        setActiveMessageId(closestId);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        cancelAnimationFrame(rafId);
+        for (const entry of entries) {
+          const id = entry.target.getAttribute('data-message-id');
+          if (!id) continue;
+          const visible = entry.intersectionRect.height > 0 || entry.isIntersecting;
+          visibleRatios.set(id, visible ? entry.intersectionRatio : 0);
+        }
+        rafId = requestAnimationFrame(updateActive);
+      },
+      { root: container, threshold: [0, 0.25, 0.5, 0.75, 1] },
+    );
+
+    const elements: Element[] = [];
+    for (const msg of userMessages) {
+      const el = container.querySelector(`[data-message-id="${msg.info.id}"]`);
+      if (el) {
+        observer.observe(el);
+        elements.push(el);
       }
-    };
-
-    const handleScrollOrResize = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(updateActiveMarker);
-    };
-
-    container.addEventListener('scroll', handleScrollOrResize, { passive: true });
-    window.addEventListener('resize', handleScrollOrResize);
-    updateActiveMarker();
-
-    const observer = new ResizeObserver(handleScrollOrResize);
-    observer.observe(container);
+    }
 
     return () => {
       cancelAnimationFrame(rafId);
-      container.removeEventListener('scroll', handleScrollOrResize);
-      window.removeEventListener('resize', handleScrollOrResize);
+      for (const el of elements) observer.unobserve(el);
       observer.disconnect();
     };
   }, [userMessages, scrollContainerRef]);
+
+  const handleMarkerClick = React.useCallback(
+    (messageId: string) => {
+      scrollToMessage(messageId, scrollContainerRef.current, messageListRef.current);
+    },
+    [scrollContainerRef, messageListRef],
+  );
 
   if (userMessages.length === 0) return null;
 
@@ -100,33 +152,13 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
     >
       {userMessages.map((msg) => {
         const messageId = String(msg.info.id);
-        const isActive = activeMessageId === messageId;
-
         return (
-          <button
+          <MarkerButton
             key={messageId}
-            type="button"
-            data-user-message-marker={messageId}
-            title={previews.get(messageId) ?? ''}
-            className={cn(
-              'w-[16px] mx-auto h-[3px] rounded-full cursor-pointer border-none p-0 m-0',
-              'transition-all duration-150 shrink-0 pointer-events-auto',
-              isActive
-                ? 'bg-[var(--primary)] h-[5px] opacity-100 shadow-sm'
-                : 'bg-[var(--muted-foreground)] opacity-60 hover:opacity-80 hover:h-[4px]',
-            )}
-            onClick={() => {
-              const container = scrollContainerRef.current;
-              if (container) {
-                const el = container.querySelector(`[data-message-id="${messageId}"]`);
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  return;
-                }
-              }
-              messageListRef.current?.scrollToMessageId(messageId, { behavior: 'smooth' });
-            }}
-            aria-label={`Go to message ${messageId}`}
+            messageId={messageId}
+            isActive={activeMessageId === messageId}
+            preview={previews.get(messageId) ?? ''}
+            onClick={handleMarkerClick}
           />
         );
       })}
