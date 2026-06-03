@@ -45,6 +45,7 @@ export const settingsDict = {
   'settings.page.sessions.title': '세션',
   'settings.page.magicPrompts.title': '매직 프롬프트',
   'settings.page.notifications.title': '알림',
+  'settings.page.layout.title': '레이아웃',
   'settings.page.voice.title': '음성',
   'settings.page.tunnel.title': '원격 터널',
   'settings.page.snippets.title': '스니펫',

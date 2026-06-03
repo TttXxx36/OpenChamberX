@@ -411,7 +411,7 @@ Active development. Here's what's being worked on or planned:
 
 ## Recent Changes
 
-### v1.11.8 — Session Rename Fix & Performance
+### v1.20.2 — StatusBar & i18n Fix
 
 **Bug Fixes:**
 

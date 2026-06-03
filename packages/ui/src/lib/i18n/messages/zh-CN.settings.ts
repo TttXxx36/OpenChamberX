@@ -45,6 +45,7 @@ export const settingsDict = {
   'settings.page.sessions.title': '会话',
   'settings.page.magicPrompts.title': '魔法提示词',
   'settings.page.notifications.title': '通知',
+  'settings.page.layout.title': '布局',
   'settings.page.voice.title': '语音',
   'settings.page.tunnel.title': '远程隧道',
   'settings.page.snippets.title': '代码片段',

@@ -493,7 +493,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       case 'notifications':
         return t('settings.page.notifications.title');
       case 'layout':
-        return 'Layout';
+        return t('settings.page.layout.title');
       case 'voice':
         return t('settings.page.voice.title');
       case 'tunnel':

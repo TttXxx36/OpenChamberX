@@ -45,6 +45,7 @@ export const settingsDict = {
   "settings.page.sessions.title": "Sesiones",
   "settings.page.magicPrompts.title": "Prompts mágicos",
   "settings.page.notifications.title": "Notificaciones",
+  "settings.page.layout.title": "Diseño",
   "settings.page.voice.title": "Voz",
   "settings.page.tunnel.title": "Túnel remoto",
   "settings.page.snippets.title": "Snippets",

@@ -44,6 +44,28 @@ export const StatusBar: React.FC = () => {
   /* ── Token usage (basic count from the current session) ─── */
   const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+
+  /* Retry mechanism for async-loaded tokens:
+   * getContextUsage returns null until sync messages arrive via SSE.
+   * We poll briefly after session switch so tokens appear automatically. */
+  const [retryKey, setRetryKey] = React.useState(0);
+  React.useEffect(() => {
+    if (!currentSessionId) return;
+    let cancelled = false;
+    let attempts = 0;
+    const poll = () => {
+      if (cancelled || attempts >= 8) return;
+      attempts++;
+      setRetryKey((k) => k + 1);
+      setTimeout(poll, 600);
+    };
+    const timer = setTimeout(poll, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [currentSessionId, getContextUsage]);
+
   const tokenUsage: SessionContextUsage | null = React.useMemo(() => {
     const limit =
       currentModel &&
@@ -56,8 +78,8 @@ export const StatusBar: React.FC = () => {
     const outputLimit =
       limit && typeof limit.output === 'number' ? limit.output : 0;
     return getContextUsage(contextLimit, outputLimit);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentSessionId triggers recalculation when session changes
-  }, [currentModel, getContextUsage, currentSessionId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentModel, getContextUsage, currentSessionId, retryKey]);
 
   /* ── Actions ────────────────────────────────────────────── */
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);

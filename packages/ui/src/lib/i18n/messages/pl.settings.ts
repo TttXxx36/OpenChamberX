@@ -1049,6 +1049,7 @@ export const settingsDict = {
   'settings.page.mcp.title': 'MCP',
   'settings.page.plugins.title': 'Plugins',
   'settings.page.notifications.title': 'Powiadomienia',
+  'settings.page.layout.title': 'Układ',
   'settings.page.projects.title': 'Projekty',
   'settings.page.providers.title': 'Dostawcy',
   'settings.page.remoteInstances.title': 'Zdalne instancje',

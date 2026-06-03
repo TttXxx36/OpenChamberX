@@ -123,7 +123,7 @@ const CONTEXT_PANEL_MAX_WIDTH = 1400;
 const CONTEXT_PANEL_MAX_TABS = 12;
 const CONTEXT_PANEL_MAX_LABEL_LENGTH = 120;
 const LEFT_SIDEBAR_MIN_WIDTH = 280;
-const RIGHT_SIDEBAR_MIN_WIDTH = 360;
+const RIGHT_SIDEBAR_MIN_WIDTH = 720;
 const activeMainTabByRuntime = new Map<string, MainTab>();
 
 const runtimeMemoryKey = (value?: string | null): string => {

@@ -8,7 +8,7 @@ OpenChamberX 是 [openchamber](https://github.com/openchamber/openchamber) 的 f
 
 | 维度 | 上游 | fork (OpenChamberX) |
 |------|------|---------------------|
-| 当前版本 | v1.12.0 | v1.11.8 |
+| 当前版本 | v1.12.0 | v1.20.2 |
 | UI Store | 单 `useUIStore` | 拆分为 `useUIStore` (deprecated) + `useNotificationStore` (新) |
 | 错误处理 | 部分 silent error | 统一 `formatSdkError` + throw on error |
 | 性能 | 标准实现 | `event-reducer` 消除 O(n) array clone |
@@ -164,7 +164,7 @@ Git merge 提供三种策略（通过 `git merge -X <strategy>` 指定）：
 ### 6.2 v1.11.x → v1.12.x: 自动 release 机制
 
 - 上游用 `v*` tag 触发 release
-- fork 改为"main push 自动 release"（v1.11.8 起）
+- fork 改为"main push 自动 release"（v1.20.2 起）
 - **同步时保留 fork 的 release workflow**
 
 ### 6.3 未来可能遇到的变化

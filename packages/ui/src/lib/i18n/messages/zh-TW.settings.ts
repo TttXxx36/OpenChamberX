@@ -42,6 +42,7 @@
   'settings.page.sessions.title': '工作階段',
   'settings.page.magicPrompts.title': '魔法提示詞',
   'settings.page.notifications.title': '通知',
+  'settings.page.layout.title': '佈局',
   'settings.page.voice.title': '語音',
   'settings.page.tunnel.title': 'Remote Tunnel',
   'settings.page.snippets.title': '程式片段',

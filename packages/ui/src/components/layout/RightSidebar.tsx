@@ -3,9 +3,9 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { useI18n } from '@/lib/i18n';
 
-export const RIGHT_SIDEBAR_CONTENT_WIDTH = 420;
-const RIGHT_SIDEBAR_MIN_WIDTH = 360;
-const RIGHT_SIDEBAR_MAX_WIDTH = 860;
+export const RIGHT_SIDEBAR_CONTENT_WIDTH = 840;
+const RIGHT_SIDEBAR_MIN_WIDTH = 720;
+const RIGHT_SIDEBAR_MAX_WIDTH = 1200;
 
 interface RightSidebarProps {
   isOpen: boolean;

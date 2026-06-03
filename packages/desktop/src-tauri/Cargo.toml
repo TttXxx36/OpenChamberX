@@ -1,6 +1,6 @@
 [package]
 name = "openchamber-desktop"
-version = "1.11.7"
+version = "1.20.2"
 edition = "2021"
 publish = false
 description = "A rich interface for OpenCode — review diffs, manage agents, run dev servers"

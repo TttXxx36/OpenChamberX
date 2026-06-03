@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 
-## [1.11.8] - 2026-06-02
+## [1.20.2] - 2026-06-03
 
 ### Performance
 - Store: marked `useUIStore` as `@deprecated` with migration guide; new `useNotificationStore` for notification settings
