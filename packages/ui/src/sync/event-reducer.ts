@@ -329,10 +329,11 @@ export function applyDirectoryEvent(
       return false
     }
     const dedupeFields = getUpdatedDeltaFields(previous, part)
-    parts[result.index] = dedupeFields.length > 0
+    const next = [...parts]
+    next[result.index] = dedupeFields.length > 0
       ? { ...part, __dedupeNextDeltaFields: dedupeFields } as unknown as Part
       : part
-    draft.part[messageID] = parts
+    draft.part[messageID] = next
   } else {
     // Replace optimistic part — needs splice, so clone only when mutating structure
     const hasOptimistic = parts.length > 0 && !(parts[0] as { sessionID?: string }).sessionID
@@ -346,10 +347,11 @@ export function applyDirectoryEvent(
       next.splice(insertResult.index, 0, part)
       draft.part[messageID] = next
     } else {
-      // No structural change needed — insert into existing array
+      // Clone the array so message selectors observe a changed parts reference.
+      const next = [...parts]
       const insertResult = Binary.search(parts, part.id, (p) => p.id)
-      parts.splice(insertResult.index, 0, part)
-      draft.part[messageID] = parts
+      next.splice(insertResult.index, 0, part)
+      draft.part[messageID] = next
     }
   }
       return missingOwningMessage
@@ -405,14 +407,13 @@ export function applyDirectoryEvent(
   const existingValue = existing[props.field] as string | undefined
   const dedupeFields = (existing as DedupeMetadata).__dedupeNextDeltaFields ?? []
   const shouldDedupe = dedupeFields.includes(props.field)
-  // Only create a new reference for the changed part, reuse the same array
-  // (draft is a mutable copy — direct mutation is safe and avoids O(n) clone per delta)
-  parts[result.index] = {
+  const next = [...parts]
+  next[result.index] = {
     ...existing,
     [props.field]: shouldDedupe ? appendNonOverlappingDelta(existingValue, props.delta) : (existingValue ?? "") + props.delta,
     __dedupeNextDeltaFields: dedupeFields.filter((field) => field !== props.field),
   } as unknown as Part
-  draft.part[props.messageID] = parts
+  draft.part[props.messageID] = next
       return true
     }
 

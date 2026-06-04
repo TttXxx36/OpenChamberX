@@ -88,6 +88,31 @@ describe("applyDirectoryEvent", () => {
     expect(result).toBe(true)
   })
 
+  test("replaces the parts array when a delta updates existing text", () => {
+    const initialParts = [{ id: "prt_1", messageID: "msg_1", type: "text", text: "" } as Part]
+    const draft = state({ part: { msg_1: initialParts } })
+
+    const result = applyDirectoryEvent(draft, deltaEvent())
+
+    expect(result).toBe(true)
+    expect(draft.part.msg_1).not.toBe(initialParts)
+    expect((draft.part.msg_1[0] as Extract<Part, { type: "text" }>).text).toBe("hello")
+  })
+
+  test("replaces the parts array when an existing part is finalized", () => {
+    const initialParts = [{ id: "prt_1", messageID: "msg_1", sessionID: "ses_1", type: "text", text: "thinking" } as Part]
+    const draft = state({
+      message: { ses_1: [{ id: "msg_1", sessionID: "ses_1", role: "assistant", time: { created: 1 } } as never] },
+      part: { msg_1: initialParts },
+    })
+
+    const result = applyDirectoryEvent(draft, partUpdatedEvent())
+
+    expect(result).toBe(true)
+    expect(draft.part.msg_1).not.toBe(initialParts)
+    expect((draft.part.msg_1[0] as Extract<Part, { type: "text" }>).text).toBe("hello")
+  })
+
   test("skips duplicate session status events", () => {
     const draft = state()
     const busyStatus = { type: "busy" } as SessionStatus

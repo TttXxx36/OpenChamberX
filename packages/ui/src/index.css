@@ -497,119 +497,18 @@ svg.animate-spin {
   --oc-scrollbar-thumb-hover: oklch(0.6 0.02 80 / 0.5);
 }
 
-[data-scrollbar="chat"]::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-[data-scrollbar="chat"].chat-scroll,
-.chat-scroll {
-  scrollbar-gutter: stable both-edges;
-}
-
-html:not(.dark) .chat-scroll {
-  color-scheme: dark;
-}
-
-[data-scrollbar="chat"]::-webkit-scrollbar {
-  width: 10px !important;
-  height: 10px !important;
-  background: transparent !important;
-  -webkit-appearance: none;
-}
-
-[data-scrollbar="chat"].chat-scroll::-webkit-scrollbar,
-.chat-scroll::-webkit-scrollbar {
-  width: 10px !important;
-  height: 10px !important;
-}
-
-[data-scrollbar="chat"]::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-
-[data-scrollbar="chat"].chat-scroll::-webkit-scrollbar-track,
-.chat-scroll::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-
-[data-scrollbar="chat"]::-webkit-scrollbar-thumb {
-  background: var(--oc-scrollbar-thumb) !important;
-  border-radius: 6px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-[data-scrollbar="chat"].chat-scroll::-webkit-scrollbar-thumb,
-.chat-scroll::-webkit-scrollbar-thumb {
-  background: var(--oc-scrollbar-thumb) !important;
-  border-radius: 6px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-[data-scrollbar="chat"]::-webkit-scrollbar-thumb:hover {
-  background: var(--oc-scrollbar-thumb-hover) !important;
-  background-clip: padding-box;
-}
-
-[data-scrollbar="chat"].chat-scroll::-webkit-scrollbar-thumb:hover,
-.chat-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--oc-scrollbar-thumb-hover) !important;
-  background-clip: padding-box;
-}
-
-[data-scrollbar="chat"]::-webkit-scrollbar-corner {
-  background: transparent !important;
-}
-
-/* Chat scrollbar: always visible native scrollbar */
-.overlay-scrollbar-target[data-scrollbar="chat"] {
-  scrollbar-width: thin !important;
-  scrollbar-color: var(--oc-scrollbar-thumb) transparent !important;
-  scrollbar-gutter: stable both-edges !important;
-  -ms-overflow-style: auto !important;
-}
-
-.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar {
-  width: 10px !important;
-  height: 10px !important;
-  display: block !important;
-}
-
-.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar-thumb {
-  background: var(--oc-scrollbar-thumb) !important;
-  border-radius: 6px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  min-height: 32px;
-}
-
-.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar-thumb:hover {
-  background: var(--oc-scrollbar-thumb-hover) !important;
-  background-clip: padding-box;
-}
-
-.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-
-.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar-corner {
-  background: transparent !important;
-}
-
-/* Non-chat overlay targets: keep hidden */
-.overlay-scrollbar-target:not([data-scrollbar="chat"]) {
+/* Hide native scrollbars for overlay targets (all browsers) */
+.overlay-scrollbar-target {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
   scrollbar-gutter: auto !important;
 }
 
-.overlay-scrollbar-target:not([data-scrollbar="chat"])::-webkit-scrollbar {
+.overlay-scrollbar-target::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
   display: none !important;
@@ -678,6 +577,20 @@ html:not(.dark) .chat-scroll {
 
 .overlay-scrollbar__thumb--vertical {
   margin: 0;
+}
+
+.overlay-scrollbar--chat-rail .overlay-scrollbar__thumb--vertical {
+  right: 6px !important;
+  width: 4px;
+  background: color-mix(in srgb, var(--primary-base, var(--primary)) 58%, var(--oc-scrollbar-thumb));
+  opacity: 0.65;
+}
+
+.overlay-scrollbar--chat-rail .overlay-scrollbar__thumb--vertical:hover,
+.overlay-scrollbar--chat-rail .overlay-scrollbar__thumb--vertical:active {
+  width: 6px;
+  background: color-mix(in srgb, var(--primary-base, var(--primary)) 72%, var(--oc-scrollbar-thumb-hover));
+  opacity: 0.95;
 }
 
 /* Pierre diff viewer styling */
