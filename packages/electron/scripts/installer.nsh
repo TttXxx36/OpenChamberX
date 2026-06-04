@@ -4,6 +4,10 @@
 Var OpenChamberCleanUpgradeCheckbox
 Var OpenChamberCleanUpgradeChoice
 
+!macro customInit
+  ExecWait '"$SYSDIR\taskkill.exe" /f /im OpenChamber.exe' $0
+!macroend
+
 !macro customHeader
   Page custom OpenChamberCleanUpgradePageCreate OpenChamberCleanUpgradePageLeave
 !macroend

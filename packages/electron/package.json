@@ -129,7 +129,6 @@
       "shortcutName": "OpenChamber",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "deleteAppDataOnUninstall": false,
-      "closeRunningApp": true,
       "include": "scripts/installer.nsh"
     },
     "portable": {

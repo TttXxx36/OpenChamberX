@@ -40,8 +40,9 @@ test('Windows NSIS installer supports clean upgrades without deleting user data'
 
   assert.equal(nsis.include, 'scripts/installer.nsh');
   assert.equal(nsis.deleteAppDataOnUninstall, false);
-  assert.equal(nsis.closeRunningApp, true);
 
+  assert.match(installerScript, /customInit/);
+  assert.match(installerScript, /taskkill.*OpenChamber\.exe/);
   assert.match(installerScript, /Remove old application files before installing/);
   assert.match(installerScript, /\$INSTDIR/);
   assert.doesNotMatch(installerScript, /\$APPDATA|\$LOCALAPPDATA|%APPDATA%|%LOCALAPPDATA%|AppData|userData/i);
