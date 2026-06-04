@@ -88,3 +88,73 @@ export const getFileReferenceContextDirectory = (baseDirectory: string, resolved
   const parent = normalizedPath.replace(/\/[^/]*$/, '');
   return parent || normalizedPath;
 };
+
+const KNOWN_FILE_BASENAMES = new Set([
+  'dockerfile',
+  'makefile',
+  'readme',
+  'license',
+  '.env',
+  '.gitignore',
+  '.npmrc',
+]);
+
+const trimPathCandidate = (value: string): string => {
+  let next = (value || '').trim();
+  if (!next) {
+    return '';
+  }
+
+  if ((next.startsWith('`') && next.endsWith('`')) || (next.startsWith('"') && next.endsWith('"')) || (next.startsWith("'") && next.endsWith("'"))) {
+    next = next.slice(1, -1).trim();
+  }
+
+  return next.replace(/[.,;!?]+$/g, '');
+};
+
+const hasFileExtension = (path: string): boolean => {
+  const base = path.split('/').filter(Boolean).pop() ?? '';
+  if (!base || base.endsWith('.')) {
+    return false;
+  }
+  return /\.[A-Za-z0-9_-]{1,16}$/.test(base);
+};
+
+export const isLikelyLocalFileReference = (value: string): boolean => {
+  const candidate = trimPathCandidate(value);
+  if (!candidate || candidate.startsWith('--') || candidate.includes('://')) {
+    return false;
+  }
+
+  if (/[<>]/.test(candidate) || /\s{2,}/.test(candidate)) {
+    return false;
+  }
+
+  const normalized = normalizeFileReferencePath(candidate.replace(/#.*$/, '').replace(/;.*$/, ''));
+  const withoutLineSuffix = normalized.replace(/^(.*\.[A-Za-z0-9_-]{1,16}):(\d+)(?::\d+)?$/, '$1');
+  const baseName = withoutLineSuffix.split('/').filter(Boolean).pop() ?? withoutLineSuffix;
+  if (!baseName || baseName === '.' || baseName === '..') {
+    return false;
+  }
+
+  const base = baseName.toLowerCase();
+  return KNOWN_FILE_BASENAMES.has(base) || (base.startsWith('.') && base.length > 1) || hasFileExtension(withoutLineSuffix);
+};
+
+export const getFileReferenceCandidateFromAnchor = (href: string | null | undefined, text: string | null | undefined): string => {
+  const hrefCandidate = trimPathCandidate(href ?? '');
+  if (hrefCandidate && isLikelyLocalFileReference(hrefCandidate)) {
+    return hrefCandidate;
+  }
+
+  const textCandidate = trimPathCandidate(text ?? '');
+  if (!textCandidate || !isLikelyLocalFileReference(textCandidate)) {
+    return '';
+  }
+
+  if (!hrefCandidate || hrefCandidate.startsWith('openchamber-ui://')) {
+    return textCandidate;
+  }
+
+  return '';
+};

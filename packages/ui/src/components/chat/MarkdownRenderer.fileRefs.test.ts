@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  getFileReferenceCandidateFromAnchor,
   getFileReferenceBaseDirectory,
   getFileReferenceContextDirectory,
   resolveFileReferencePath,
@@ -37,5 +38,15 @@ describe('markdown file reference path resolution', () => {
   test('uses file parent as context when an absolute path is outside the base directory', () => {
     expect(getFileReferenceContextDirectory('/repo/OpenChamberX', '/repo/OtherProject/src/index.ts'))
       .toBe('/repo/OtherProject/src');
+  });
+
+  test('uses relative anchor hrefs as local file candidates before async annotation completes', () => {
+    expect(getFileReferenceCandidateFromAnchor('install.md', 'Install guide'))
+      .toBe('install.md');
+  });
+
+  test('falls back to anchor text for OpenChamber UI relative link navigations', () => {
+    expect(getFileReferenceCandidateFromAnchor('openchamber-ui://app/install.md', 'install.md'))
+      .toBe('install.md');
   });
 });

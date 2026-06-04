@@ -30,6 +30,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { EditorAPI } from '@/lib/api/types';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import {
+  getFileReferenceCandidateFromAnchor,
   getFileReferenceBaseDirectory,
   getFileReferenceContextDirectory,
   resolveFileReferencePath,
@@ -1244,19 +1245,14 @@ const isLikelyFilePathValue = (path: string): boolean => {
   return hasFileExtension(normalized);
 };
 
-const isLikelyFilePath = (value: string): boolean => {
-  const parsed = parseFileReference(value);
-  if (!parsed) {
-    return false;
-  }
-  return isLikelyFilePathValue(parsed.path);
-};
-
 const extractPathCandidateFromElement = (element: HTMLElement): string => {
   if (element.tagName.toLowerCase() === 'a') {
-    const href = element.getAttribute('href')?.trim();
-    if (href && isLikelyFilePath(href)) {
-      return href;
+    const candidate = getFileReferenceCandidateFromAnchor(
+      element.getAttribute('href'),
+      element.textContent,
+    );
+    if (candidate) {
+      return candidate;
     }
   }
 
@@ -1425,9 +1421,9 @@ const useFileReferenceInteractions = ({
       }
     };
 
-    const openFileReference = (sourceElement: HTMLElement) => {
+    const openFileReference = (sourceElement: HTMLElement, rawOverride?: string) => {
       const baseDirectory = getFileReferenceBaseDirectory({ referenceDirectory, effectiveDirectory });
-      const raw = sourceElement.getAttribute('data-openchamber-file-ref') || extractPathCandidateFromElement(sourceElement);
+      const raw = rawOverride || sourceElement.getAttribute('data-openchamber-file-ref') || extractPathCandidateFromElement(sourceElement);
       const resolved = getResolvedReference(raw, baseDirectory);
       if (!resolved) {
         return;
@@ -1469,14 +1465,28 @@ const useFileReferenceInteractions = ({
       }
 
       const fileRefElement = target.closest(FILE_LINK_SELECTOR);
-      if (!(fileRefElement instanceof HTMLElement)) {
+      if (fileRefElement instanceof HTMLElement) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        openFileReference(fileRefElement);
+        return;
+      }
+
+      const anchor = target.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) {
+        return;
+      }
+
+      const rawCandidate = getFileReferenceCandidateFromAnchor(anchor.getAttribute('href'), anchor.textContent);
+      if (!rawCandidate || !getResolvedReference(rawCandidate, getFileReferenceBaseDirectory({ referenceDirectory, effectiveDirectory }))) {
         return;
       }
 
       event.preventDefault();
       event.stopPropagation();
 
-      openFileReference(fileRefElement);
+      openFileReference(anchor, rawCandidate);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {

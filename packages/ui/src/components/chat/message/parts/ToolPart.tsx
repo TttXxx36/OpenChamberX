@@ -45,6 +45,7 @@ import { resolveFallbackTaskSessionId } from './resolveFallbackTaskSessionId';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { useI18n } from '@/lib/i18n';
 import { getDiffPatchEntries, getPatchText } from './toolDiffUtils';
+import { resolveSubtaskPanelDirectory } from '../subtaskPanel';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-4 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -62,6 +63,7 @@ interface ToolPartProps {
     onContentChange?: (reason?: ContentChangeReason) => void;
     onShowPopup?: (content: ToolPopupContent) => void;
     animateTailText?: boolean;
+    sessionDirectory?: string | null;
 }
 
 const getMultiFileDescription = (
@@ -1083,7 +1085,8 @@ const TaskToolSummary: React.FC<{
     input?: Record<string, unknown>;
     animateTailText?: boolean;
     isActive?: boolean;
-}> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input, animateTailText = true, isActive = false }) => {
+    sessionDirectory?: string | null;
+}> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input, animateTailText = true, isActive = false, sessionDirectory }) => {
     const { t } = useI18n();
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
     const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
@@ -1100,13 +1103,14 @@ const TaskToolSummary: React.FC<{
 
     const handleOpenSession = (event: React.MouseEvent) => {
         event.stopPropagation();
-        if (sessionId && currentDirectory) {
+        const panelDirectory = resolveSubtaskPanelDirectory(sessionDirectory, currentDirectory);
+        if (sessionId && panelDirectory) {
             if (isMobile || runtime?.runtime.isVSCode) {
-                setCurrentSession(sessionId, currentDirectory);
+                setCurrentSession(sessionId, panelDirectory);
                 return;
             }
 
-            openContextPanelTab(currentDirectory, {
+            openContextPanelTab(panelDirectory, {
                 mode: 'chat',
                 dedupeKey: `session:${sessionId}`,
                 label: agentType.charAt(0).toUpperCase() + agentType.slice(1),
@@ -1803,10 +1807,12 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     onContentChange,
     onShowPopup,
     animateTailText = true,
+    sessionDirectory,
 }) => {
     const state = part.state;
     const showToolFileIcons = useUIStore((s) => s.showToolFileIcons);
     const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
+    const taskPanelDirectory = resolveSubtaskPanelDirectory(sessionDirectory, currentDirectory);
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
 
     const normalizedPartTool = normalizeToolName(part.tool);
@@ -2025,14 +2031,14 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 hasRetried: taskFallbackRetried,
             });
         }, [explicitTaskSessionId, isTaskTool, currentSessionId, taskSessionResolutionStart, isFinalized, taskFallbackRetried]),
-        currentDirectory,
+        taskPanelDirectory,
     );
 
     const taskSessionId = explicitTaskSessionId ?? fallbackTaskSessionId;
     const childSessionLookupId = hasFinalMetadataTaskSummary ? '' : (taskSessionId ?? '');
 
-    const childSessionMessages = useSessionMessageRecords(childSessionLookupId, currentDirectory);
-    useEnsureSessionMessages(childSessionLookupId, currentDirectory);
+    const childSessionMessages = useSessionMessageRecords(childSessionLookupId, taskPanelDirectory);
+    useEnsureSessionMessages(childSessionLookupId, taskPanelDirectory);
 
     const childSessionTaskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
         if (!isTaskTool || !taskSessionId) {
@@ -2675,6 +2681,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                     input={input}
                     animateTailText={animateTailText}
                     isActive={isActive}
+                    sessionDirectory={taskPanelDirectory}
                 />
             ) : null}
 

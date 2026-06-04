@@ -47,6 +47,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useI18n } from '@/lib/i18n';
 import { extractLoopbackUrls } from '@/lib/url';
 import { useDeviceInfo } from '@/lib/device';
+import { resolveSubtaskPanelDirectory } from './subtaskPanel';
 
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
@@ -92,7 +93,7 @@ const normalizeSubtaskModel = (model: SubtaskPartLike['model']): string | null =
     return `${providerID}/${modelID}`;
 };
 
-const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
+const UserSubtaskPart: React.FC<{ part: SubtaskPartLike; sessionDirectory?: string | null }> = ({ part, sessionDirectory }) => {
     const [expanded, setExpanded] = React.useState(false);
     const effectiveDirectory = useEffectiveDirectory();
     const { isMobile } = useDeviceInfo();
@@ -157,13 +158,14 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
                         type="button"
                         className="typography-meta text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
                         onClick={() => {
-                            if (!effectiveDirectory) return;
+                            const panelDirectory = resolveSubtaskPanelDirectory(sessionDirectory, effectiveDirectory);
+                            if (!panelDirectory) return;
                             if (isMobile || isVSCodeRuntime()) {
-                                setCurrentSession(taskSessionID, effectiveDirectory);
+                                setCurrentSession(taskSessionID, panelDirectory);
                                 return;
                             }
 
-                            openContextPanelTab(effectiveDirectory, {
+                            openContextPanelTab(panelDirectory, {
                                 mode: 'chat',
                                 dedupeKey: `session:${taskSessionID}`,
                                 label: description || agent || t('contextPanel.mode.chat'),
@@ -342,7 +344,8 @@ const writeRevealedToolIds = (messageId: string, value: Set<string>): void => {
     revealedToolIdsByMessage.set(messageId, new Set(value));
 };
 
-const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onRevert, onFork, userActionsMode = 'inline', stickyUserHeaderEnabled = true }: {
+const UserMessageBody = React.memo(({ sessionId, messageId, parts, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onRevert, onFork, userActionsMode = 'inline', stickyUserHeaderEnabled = true }: {
+    sessionId?: string;
     messageId: string;
     parts: Part[];
     isMobile: boolean;
@@ -360,6 +363,13 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
 }) => {
     const { t } = useI18n();
     const chatSurfaceMode = useChatSurfaceMode();
+    const getDirectoryForSession = useSessionUIStore((state) => state.getDirectoryForSession);
+    const effectiveDirectory = useEffectiveDirectory();
+    const sessionDirectory = React.useMemo(() => {
+        return (sessionId ? getDirectoryForSession(sessionId) : null)
+            ?? effectiveDirectory
+            ?? '';
+    }, [effectiveDirectory, getDirectoryForSession, sessionId]);
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
 
@@ -560,7 +570,7 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, alwaysShowActi
                     if (isSubtaskPart(part)) {
                         return (
                             <React.Fragment key={part.id ?? `user-subtask-${index}`}>
-                                <UserSubtaskPart part={part} />
+                                <UserSubtaskPart part={part} sessionDirectory={sessionDirectory} />
                             </React.Fragment>
                         );
                     }
@@ -1680,6 +1690,7 @@ const AssistantMessageBody = React.memo(({
                                     onContentChange={onContentChange}
                                     onShowPopup={onShowPopup}
                                     animateTailText={animatedToolIdsLookup.has(toolPart.id)}
+                                    sessionDirectory={referenceDirectory}
                                 />
                             </ToolRevealOnMount>
                         </FadeInOnReveal>
@@ -1977,6 +1988,7 @@ const MessageBody = React.memo(({ isUser, ...props }: MessageBodyProps) => {
     if (isUser) {
         return (
             <UserMessageBody
+                sessionId={props.sessionId}
                 messageId={props.messageId}
                 parts={props.parts}
                 isMobile={props.isMobile}
