@@ -16,7 +16,7 @@ import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/
 import { streamPerfCount, streamPerfMeasure } from '@/stores/utils/streamDebug';
 import type { StreamPhase } from './message/types';
 import { normalizeParts } from './message/partUtils';
-import { getCenteredScrollTop, isWithinScrollTolerance } from './MessageList.logic';
+import { getCenteredScrollTop, getNaturalBubbleTop, isWithinScrollTolerance } from './MessageList.logic';
 
 const MESSAGE_LIST_VIRTUALIZE_THRESHOLD = 5;
 const MESSAGE_LIST_OVERSCAN = 6;
@@ -1505,6 +1505,21 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return container.querySelector(`[data-message-id="${messageId}"]`);
     }, [resolveScrollContainer]);
 
+    const findDataElement = React.useCallback((attribute: string, value: string): HTMLElement | null => {
+        const container = resolveScrollContainer();
+        if (!container) {
+            return null;
+        }
+
+        for (const el of container.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
+            if (el.getAttribute(attribute) === value) {
+                return el;
+            }
+        }
+
+        return null;
+    }, [resolveScrollContainer]);
+
     const scrollHistoryIndexIntoView = React.useCallback((index: number, behavior: ScrollBehavior = 'auto', align: 'start' | 'center' = 'start') => {
         if (!shouldVirtualizeHistory || index < 0 || index >= historyEntries.length) {
             return false;
@@ -1515,7 +1530,46 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return true;
     }, [historyEntries.length, historyVirtualizer, shouldVirtualizeHistory]);
 
+    const getNaturalUserMessageCenterTarget = React.useCallback((messageId: string) => {
+        const container = resolveScrollContainer();
+        if (!container) {
+            return null;
+        }
+
+        const anchor = findDataElement('data-user-message-anchor', messageId);
+        const sticky = findDataElement('data-sticky-user-message', messageId);
+        const bubble = findDataElement('data-user-message-bubble', messageId);
+        if (!anchor || !sticky || !bubble) {
+            return null;
+        }
+
+        const containerRect = container.getBoundingClientRect();
+        const anchorRect = anchor.getBoundingClientRect();
+        const stickyRect = sticky.getBoundingClientRect();
+        const bubbleRect = bubble.getBoundingClientRect();
+        const naturalBubbleTop = getNaturalBubbleTop({
+            anchorTop: anchorRect.top,
+            stickyTop: stickyRect.top,
+            bubbleTop: bubbleRect.top,
+        });
+
+        const top = getCenteredScrollTop({
+            containerTop: containerRect.top,
+            containerHeight: containerRect.height,
+            containerScrollTop: container.scrollTop,
+            messageTop: naturalBubbleTop,
+            messageHeight: bubbleRect.height,
+        });
+
+        return { container, top };
+    }, [findDataElement, resolveScrollContainer]);
+
     const getMessageCenterTarget = React.useCallback((messageId: string) => {
+        const naturalTarget = getNaturalUserMessageCenterTarget(messageId);
+        if (naturalTarget) {
+            return naturalTarget;
+        }
+
         const container = resolveScrollContainer();
         if (!container) {
             return null;
@@ -1535,7 +1589,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             messageHeight: messageRect.height,
         });
         return { container, top };
-    }, [findMessageElement, resolveScrollContainer]);
+    }, [findMessageElement, getNaturalUserMessageCenterTarget, resolveScrollContainer]);
 
     const scrollMessageElementIntoView = React.useCallback((messageId: string, behavior: ScrollBehavior = 'auto') => {
         const target = getMessageCenterTarget(messageId);

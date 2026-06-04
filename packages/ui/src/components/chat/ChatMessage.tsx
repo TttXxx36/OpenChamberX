@@ -1016,6 +1016,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 <div className={cn('relative flex justify-end', !isMobile ? 'group/user-shell' : undefined)}>
                                     <div className={cn('max-w-[85%]', showStickyInlineHoverRow ? 'pb-5' : undefined)}>
                                         <div
+                                            data-user-message-bubble={message.info.id}
                                             style={{
                                                 backgroundColor: 'var(--chat-user-message-bg)',
                                                 borderRadius: userMessageRadius,

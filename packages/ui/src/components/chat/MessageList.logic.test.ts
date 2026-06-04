@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getCenteredScrollTop, isWithinScrollTolerance } from './MessageList.logic';
+import { getCenteredScrollTop, getNaturalBubbleTop, isWithinScrollTolerance } from './MessageList.logic';
 
 describe('getCenteredScrollTop', () => {
     test('aligns the message center with the container center', () => {
@@ -33,5 +33,23 @@ describe('isWithinScrollTolerance', () => {
     test('keeps correcting visible center drift', () => {
         expect(isWithinScrollTolerance(12, 1)).toBe(false);
         expect(isWithinScrollTolerance(-4, 1)).toBe(false);
+    });
+});
+
+describe('getNaturalBubbleTop', () => {
+    test('uses the natural anchor instead of the sticky visual top', () => {
+        expect(getNaturalBubbleTop({
+            anchorTop: 900,
+            stickyTop: 0,
+            bubbleTop: 24,
+        })).toBe(924);
+    });
+
+    test('preserves the bubble offset inside an unstuck sticky wrapper', () => {
+        expect(getNaturalBubbleTop({
+            anchorTop: 300,
+            stickyTop: 300,
+            bubbleTop: 330,
+        })).toBe(330);
     });
 });

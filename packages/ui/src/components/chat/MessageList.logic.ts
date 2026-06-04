@@ -13,3 +13,11 @@ export function getCenteredScrollTop(input: {
 export function isWithinScrollTolerance(delta: number, tolerance: number): boolean {
     return Math.abs(delta) <= tolerance;
 }
+
+export function getNaturalBubbleTop(input: {
+    anchorTop: number;
+    stickyTop: number;
+    bubbleTop: number;
+}): number {
+    return input.anchorTop + (input.bubbleTop - input.stickyTop);
+}

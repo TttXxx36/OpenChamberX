@@ -10,6 +10,7 @@ const DOT_SIZE = 7;
 const DOT_SIZE_ACTIVE = 10;
 const PREVIEW_MAX_LENGTH = 80;
 const TOOLTIP_SHOW_DELAY_MS = 300;
+const CLICKED_MARKER_LOCK_TIMEOUT_MS = 2000;
 
 interface ChatScrollMarkersProps {
   messages: Array<{ info: Message; parts: Part[] }>;
@@ -134,6 +135,8 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
     firstVisibleIndex: number | null;
   }>({ activeMessageId: null, firstVisibleIndex: null });
   const [hoveredMessageId, setHoveredMessageId] = React.useState<string | null>(null);
+  const [lockedMessageId, setLockedMessageId] = React.useState<string | null>(null);
+  const lockTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const userMessages = React.useMemo(() => {
     return messages.filter((m) => deriveMessageRole(m.info).isUser);
@@ -228,10 +231,37 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
 
   const handleDotClick = React.useCallback(
     (messageId: string) => {
+      setLockedMessageId(messageId);
+      if (lockTimerRef.current) {
+        clearTimeout(lockTimerRef.current);
+      }
+      lockTimerRef.current = setTimeout(() => {
+        lockTimerRef.current = null;
+        setLockedMessageId(null);
+      }, CLICKED_MARKER_LOCK_TIMEOUT_MS);
       scrollToMessageCenter(messageId, messageListRef.current);
     },
     [messageListRef],
   );
+
+  React.useEffect(() => {
+    if (!lockedMessageId || markerState.activeMessageId !== lockedMessageId) {
+      return;
+    }
+    if (lockTimerRef.current) {
+      clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = null;
+    }
+    setLockedMessageId(null);
+  }, [lockedMessageId, markerState.activeMessageId]);
+
+  React.useEffect(() => {
+    return () => {
+      if (lockTimerRef.current) {
+        clearTimeout(lockTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleDotHover = React.useCallback((id: string | null) => {
     setHoveredMessageId(id);
@@ -239,7 +269,7 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
 
   if (dots.length === 0) return null;
 
-  const highlightedId = hoveredMessageId ?? markerState.activeMessageId;
+  const highlightedId = hoveredMessageId ?? lockedMessageId ?? markerState.activeMessageId;
   const startIndex = getVisibleMarkerStartIndex(dots.length, markerState.firstVisibleIndex);
   const visibleDots = dots.slice(startIndex);
   const markerOffsets = getEvenlySpacedMarkerOffsets(visibleDots.length);
