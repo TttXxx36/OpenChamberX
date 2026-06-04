@@ -1036,45 +1036,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   });
 
   const sectionsForSidebarRender = React.useMemo(() => {
-    const archiveFilteredSections = showArchivedSessions
-      ? sectionsForRender
-      : sectionsForRender.map((section) => ({
-        ...section,
-        groups: section.groups.filter((group) => !group.isArchivedBucket),
-      }));
-
-    if (isVSCode || hasSessionSearchQuery || recentSessionIds.size === 0) {
-      return archiveFilteredSections;
+    if (showArchivedSessions) {
+      return sectionsForRender;
     }
-
-    const filterNodes = (nodes: SessionNode[]): SessionNode[] => {
-      return nodes.reduce<SessionNode[]>((acc, node) => {
-        if (recentSessionIds.has(node.session.id)) {
-          return acc;
-        }
-
-        const filteredChildren = filterNodes(node.children);
-        if (filteredChildren.length === node.children.length) {
-          acc.push(node);
-          return acc;
-        }
-
-        acc.push({
-          ...node,
-          children: filteredChildren,
-        });
-        return acc;
-      }, []);
-    };
-
-    return archiveFilteredSections.map((section) => ({
+    return sectionsForRender.map((section) => ({
       ...section,
-      groups: section.groups.map((group) => ({
-        ...group,
-        sessions: filterNodes(group.sessions),
-      })),
+      groups: section.groups.filter((group) => !group.isArchivedBucket),
     }));
-  }, [isVSCode, hasSessionSearchQuery, recentSessionIds, sectionsForRender, showArchivedSessions]);
+  }, [showArchivedSessions, sectionsForRender]);
 
   const prLookupKeys = React.useMemo(() => {
     const keys = new Set<string>();
