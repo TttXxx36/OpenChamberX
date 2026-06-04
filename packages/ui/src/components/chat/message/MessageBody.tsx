@@ -46,8 +46,7 @@ import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useI18n } from '@/lib/i18n';
 import { extractLoopbackUrls } from '@/lib/url';
-import { useDeviceInfo } from '@/lib/device';
-import { resolveSubtaskPanelDirectory } from './subtaskPanel';
+import { navigateToSubtaskSession } from './subtaskNavigation';
 
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
@@ -96,9 +95,7 @@ const normalizeSubtaskModel = (model: SubtaskPartLike['model']): string | null =
 const UserSubtaskPart: React.FC<{ part: SubtaskPartLike; sessionDirectory?: string | null }> = ({ part, sessionDirectory }) => {
     const [expanded, setExpanded] = React.useState(false);
     const effectiveDirectory = useEffectiveDirectory();
-    const { isMobile } = useDeviceInfo();
     const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
-    const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const { t } = useI18n();
 
     const description = typeof part.description === 'string' ? part.description.trim() : '';
@@ -158,18 +155,11 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike; sessionDirectory?: stri
                         type="button"
                         className="typography-meta text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
                         onClick={() => {
-                            const panelDirectory = resolveSubtaskPanelDirectory(sessionDirectory, effectiveDirectory);
-                            if (!panelDirectory) return;
-                            if (isMobile || isVSCodeRuntime()) {
-                                setCurrentSession(taskSessionID, panelDirectory);
-                                return;
-                            }
-
-                            openContextPanelTab(panelDirectory, {
-                                mode: 'chat',
-                                dedupeKey: `session:${taskSessionID}`,
-                                label: description || agent || t('contextPanel.mode.chat'),
-                                readOnly: true,
+                            navigateToSubtaskSession({
+                                sessionId: taskSessionID,
+                                sessionDirectory,
+                                currentDirectory: effectiveDirectory,
+                                setCurrentSession,
                             });
                         }}
                     >

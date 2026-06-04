@@ -46,6 +46,7 @@ import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { useI18n } from '@/lib/i18n';
 import { getDiffPatchEntries, getPatchText } from './toolDiffUtils';
 import { resolveSubtaskPanelDirectory } from '../subtaskPanel';
+import { navigateToSubtaskSession } from '../subtaskNavigation';
 import { readTaskSessionIdFromOutput, readTaskSessionIdFromRecord } from '../taskSessionId';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-4 sm:!leading-6 tracking-normal';
@@ -1068,9 +1069,7 @@ const TaskToolSummary: React.FC<{
     const { t } = useI18n();
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
     const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
-    const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
-    const runtime = React.useContext(RuntimeAPIContext);
     const displayEntries = entries;
 
     const trimmedOutput = typeof output === 'string'
@@ -1081,20 +1080,12 @@ const TaskToolSummary: React.FC<{
 
     const handleOpenSession = (event: React.MouseEvent) => {
         event.stopPropagation();
-        const panelDirectory = resolveSubtaskPanelDirectory(sessionDirectory, currentDirectory);
-        if (sessionId && panelDirectory) {
-            if (isMobile || runtime?.runtime.isVSCode) {
-                setCurrentSession(sessionId, panelDirectory);
-                return;
-            }
-
-            openContextPanelTab(panelDirectory, {
-                mode: 'chat',
-                dedupeKey: `session:${sessionId}`,
-                label: agentType.charAt(0).toUpperCase() + agentType.slice(1),
-                readOnly: true,
-            });
-        }
+        navigateToSubtaskSession({
+            sessionId,
+            sessionDirectory,
+            currentDirectory,
+            setCurrentSession,
+        });
     };
 
     const agentType = typeof input?.subagent_type === 'string'
