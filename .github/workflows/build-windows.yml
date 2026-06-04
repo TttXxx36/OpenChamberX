@@ -16,17 +16,20 @@ on:
         options: ['true', 'false']
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -41,49 +44,51 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build UI library
-        run: bun run --cwd packages/ui build
-
-      - name: Build web app
-        run: bun run --cwd packages/web build
-
-      - name: Build Electron web assets
-        run: bun run --cwd packages/electron build:web-assets
-
-      - name: Bundle Electron main process
-        run: bun run --cwd packages/electron bundle:main
-
-      - name: Package Windows installer
-        run: bun run --cwd packages/electron package
+      - name: Build Electron Windows artifacts
+        working-directory: packages/electron
+        shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ELECTRON_BUILDER_ARCH: x64
+        run: |
+          bun run build:web-assets
+          bun run bundle:main
+          bun run rebuild:native
+          node ./scripts/package.mjs --win --x64 --publish=never
 
       - name: Upload NSIS installer
         uses: actions/upload-artifact@v4
         with:
           name: OpenChamberX-Installer
-          path: packages/electron/dist/*.exe
-          if-no-files-found: warn
+          path: |
+            packages/electron/dist/*.exe
+            packages/electron/dist/*.blockmap
+            !packages/electron/dist/*-portable.exe
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload portable version
         uses: actions/upload-artifact@v4
         with:
           name: OpenChamberX-Portable
           path: packages/electron/dist/*-portable.exe
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Upload latest.yml for auto-update
         uses: actions/upload-artifact@v4
         with:
           name: OpenChamberX-Update-Metadata
           path: packages/electron/dist/latest.yml
-          if-no-files-found: ignore
+          if-no-files-found: error
+          retention-days: 14
 
   release:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
     if: >-
-      github.ref == 'refs/heads/main' ||
       startsWith(github.ref, 'refs/tags/v') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
 
@@ -117,6 +122,7 @@ jobs:
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           files: |
             OpenChamberX-Installer/*.exe
+            OpenChamberX-Installer/*.blockmap
             OpenChamberX-Portable/*.exe
             OpenChamberX-Update-Metadata/latest.yml
           generate_release_notes: true
