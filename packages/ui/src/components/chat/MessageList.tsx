@@ -16,13 +16,17 @@ import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/
 import { streamPerfCount, streamPerfMeasure } from '@/stores/utils/streamDebug';
 import type { StreamPhase } from './message/types';
 import { normalizeParts } from './message/partUtils';
-import { getCenteredScrollTop } from './MessageList.logic';
+import { getCenteredScrollTop, isWithinScrollTolerance } from './MessageList.logic';
 
 const MESSAGE_LIST_VIRTUALIZE_THRESHOLD = 5;
 const MESSAGE_LIST_OVERSCAN = 6;
+const MESSAGE_CENTER_TOLERANCE_PX = 1;
+const MESSAGE_CENTER_MAX_ATTEMPTS = 8;
 const EMPTY_STATIC_ENTRY_MESSAGES: ChatMessageEntry[] = [];
 const EMPTY_UNGROUPED_MESSAGE_IDS = new Set<string>();
 const EMPTY_VIRTUAL_ROWS: VirtualItem[] = [];
+
+type PendingMessageCenter = { messageId: string; attempts: number };
 
 const estimateHistoryEntryHeight = (entry: RenderEntry | undefined): number => {
     if (!entry) {
@@ -1191,6 +1195,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
     const historyContentRef = React.useRef<HTMLDivElement | null>(null);
     const pendingVirtualMeasureFrameRef = React.useRef<number | null>(null);
+    const pendingMessageCenterRef = React.useRef<PendingMessageCenter | null>(null);
+    const pendingMessageCenterFrameRef = React.useRef<number | null>(null);
+    const runPendingMessageCenterRef = React.useRef<() => void>(() => {});
     const resolveScrollContainer = React.useCallback((): HTMLDivElement | null => {
         if (scrollRef?.current) {
             return scrollRef.current;
@@ -1392,6 +1399,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             if (pendingVirtualMeasureFrameRef.current !== null && typeof window !== 'undefined') {
                 window.cancelAnimationFrame(pendingVirtualMeasureFrameRef.current);
             }
+            if (pendingMessageCenterFrameRef.current !== null && typeof window !== 'undefined') {
+                window.cancelAnimationFrame(pendingMessageCenterFrameRef.current);
+            }
         };
     }, []);
 
@@ -1505,14 +1515,14 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return true;
     }, [historyEntries.length, historyVirtualizer, shouldVirtualizeHistory]);
 
-    const scrollMessageElementIntoView = React.useCallback((messageId: string, behavior: ScrollBehavior = 'auto') => {
+    const getMessageCenterTarget = React.useCallback((messageId: string) => {
         const container = resolveScrollContainer();
         if (!container) {
-            return false;
+            return null;
         }
         const messageElement = findMessageElement(messageId);
         if (!messageElement) {
-            return false;
+            return null;
         }
 
         const containerRect = container.getBoundingClientRect();
@@ -1524,9 +1534,85 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             messageTop: messageRect.top,
             messageHeight: messageRect.height,
         });
-        container.scrollTo({ top, behavior });
-        return true;
+        return { container, top };
     }, [findMessageElement, resolveScrollContainer]);
+
+    const scrollMessageElementIntoView = React.useCallback((messageId: string, behavior: ScrollBehavior = 'auto') => {
+        const target = getMessageCenterTarget(messageId);
+        if (!target) {
+            return false;
+        }
+        const delta = target.top - target.container.scrollTop;
+        if (isWithinScrollTolerance(delta, MESSAGE_CENTER_TOLERANCE_PX)) {
+            return true;
+        }
+        target.container.scrollTo({ top: target.top, behavior });
+        return true;
+    }, [getMessageCenterTarget]);
+
+    const clearPendingMessageCenter = React.useCallback(() => {
+        pendingMessageCenterRef.current = null;
+        if (pendingMessageCenterFrameRef.current !== null && typeof window !== 'undefined') {
+            window.cancelAnimationFrame(pendingMessageCenterFrameRef.current);
+        }
+        pendingMessageCenterFrameRef.current = null;
+    }, []);
+
+    const schedulePendingMessageCenter = React.useCallback(() => {
+        if (!pendingMessageCenterRef.current) {
+            return;
+        }
+        if (typeof window === 'undefined') {
+            runPendingMessageCenterRef.current();
+            return;
+        }
+        if (pendingMessageCenterFrameRef.current !== null) {
+            return;
+        }
+        pendingMessageCenterFrameRef.current = window.requestAnimationFrame(() => {
+            pendingMessageCenterFrameRef.current = null;
+            runPendingMessageCenterRef.current();
+        });
+    }, []);
+
+    const runPendingMessageCenter = React.useCallback(() => {
+        const pending = pendingMessageCenterRef.current;
+        if (!pending) {
+            return;
+        }
+        const target = getMessageCenterTarget(pending.messageId);
+        if (!target) {
+            pending.attempts += 1;
+            if (pending.attempts >= MESSAGE_CENTER_MAX_ATTEMPTS) {
+                clearPendingMessageCenter();
+                return;
+            }
+            schedulePendingMessageCenter();
+            return;
+        }
+
+        const delta = target.top - target.container.scrollTop;
+        if (isWithinScrollTolerance(delta, MESSAGE_CENTER_TOLERANCE_PX)) {
+            clearPendingMessageCenter();
+            return;
+        }
+
+        target.container.scrollTo({ top: target.top, behavior: 'auto' });
+        pending.attempts += 1;
+        if (pending.attempts >= MESSAGE_CENTER_MAX_ATTEMPTS) {
+            clearPendingMessageCenter();
+            return;
+        }
+        schedulePendingMessageCenter();
+    }, [clearPendingMessageCenter, getMessageCenterTarget, schedulePendingMessageCenter]);
+
+    React.useEffect(() => {
+        runPendingMessageCenterRef.current = runPendingMessageCenter;
+    }, [runPendingMessageCenter]);
+
+    React.useLayoutEffect(() => {
+        schedulePendingMessageCenter();
+    }, [historyVirtualRows, schedulePendingMessageCenter]);
 
     React.useEffect(() => {
         if (!ref) {
@@ -1566,12 +1652,22 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     return false;
                 }
 
-                return scrollMessageElementIntoView(messageId, behavior)
-                    || (
-                        trailingStreamingEntry !== undefined && index >= historyEntries.length
-                            ? false
-                            : scrollHistoryIndexIntoView(index, behavior, 'center')
-                    );
+                if (scrollMessageElementIntoView(messageId, behavior)) {
+                    clearPendingMessageCenter();
+                    return true;
+                }
+
+                if (trailingStreamingEntry !== undefined && index >= historyEntries.length) {
+                    return false;
+                }
+
+                if (!scrollHistoryIndexIntoView(index, 'auto', 'center')) {
+                    return false;
+                }
+
+                pendingMessageCenterRef.current = { messageId, attempts: 0 };
+                schedulePendingMessageCenter();
+                return true;
             },
 
             captureViewportAnchor: () => {
@@ -1668,7 +1764,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return () => {
             objectRef.current = null;
         };
-    }, [findMessageElement, historyEntries.length, historyVirtualizer, messageIndexMap, resolveScrollContainer, scrollHistoryIndexIntoView, scrollMessageElementIntoView, shouldVirtualizeHistory, trailingStreamingEntry, turnIndexMap, ref]);
+    }, [clearPendingMessageCenter, findMessageElement, historyEntries.length, historyVirtualizer, messageIndexMap, resolveScrollContainer, schedulePendingMessageCenter, scrollHistoryIndexIntoView, scrollMessageElementIntoView, shouldVirtualizeHistory, trailingStreamingEntry, turnIndexMap, ref]);
 
     const disableFadeIn = false;
 

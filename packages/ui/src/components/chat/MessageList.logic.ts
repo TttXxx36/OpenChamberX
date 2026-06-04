@@ -9,3 +9,7 @@ export function getCenteredScrollTop(input: {
     const messageCenter = input.messageTop + input.messageHeight / 2;
     return Math.max(0, input.containerScrollTop + messageCenter - containerCenter);
 }
+
+export function isWithinScrollTolerance(delta: number, tolerance: number): boolean {
+    return Math.abs(delta) <= tolerance;
+}

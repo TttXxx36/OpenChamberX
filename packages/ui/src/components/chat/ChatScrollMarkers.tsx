@@ -42,15 +42,6 @@ function getMessagePreview(msg: { info: Message; parts: Part[] }): string {
   return 'Attachment';
 }
 
-function getMessageElement(container: HTMLDivElement, messageId: string): HTMLElement | null {
-  for (const el of container.querySelectorAll<HTMLElement>('[data-message-id]')) {
-    if (el.getAttribute('data-message-id') === messageId) {
-      return el;
-    }
-  }
-  return null;
-}
-
 const DotButton: React.FC<DotProps> = React.memo(
   ({ dot, offset, isActive, onDotClick, onDotHover }) => {
     const size = isActive ? DOT_SIZE_ACTIVE : DOT_SIZE;
@@ -128,16 +119,8 @@ DotButton.displayName = 'DotButton';
 
 function scrollToMessageCenter(
   messageId: string,
-  container: HTMLDivElement | null,
   messageListHandle: MessageListHandle | null,
 ): void {
-  if (container) {
-    const el = getMessageElement(container, messageId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-  }
   messageListHandle?.scrollToMessageId(messageId, { behavior: 'smooth' });
 }
 
@@ -245,9 +228,9 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
 
   const handleDotClick = React.useCallback(
     (messageId: string) => {
-      scrollToMessageCenter(messageId, scrollContainerRef.current, messageListRef.current);
+      scrollToMessageCenter(messageId, messageListRef.current);
     },
-    [scrollContainerRef, messageListRef],
+    [messageListRef],
   );
 
   const handleDotHover = React.useCallback((id: string | null) => {

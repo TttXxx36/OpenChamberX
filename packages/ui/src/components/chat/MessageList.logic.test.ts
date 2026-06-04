@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getCenteredScrollTop } from './MessageList.logic';
+import { getCenteredScrollTop, isWithinScrollTolerance } from './MessageList.logic';
 
 describe('getCenteredScrollTop', () => {
     test('aligns the message center with the container center', () => {
@@ -21,5 +21,17 @@ describe('getCenteredScrollTop', () => {
             messageTop: 120,
             messageHeight: 80,
         })).toBe(0);
+    });
+});
+
+describe('isWithinScrollTolerance', () => {
+    test('treats sub-pixel center drift as settled', () => {
+        expect(isWithinScrollTolerance(0.5, 1)).toBe(true);
+        expect(isWithinScrollTolerance(-0.75, 1)).toBe(true);
+    });
+
+    test('keeps correcting visible center drift', () => {
+        expect(isWithinScrollTolerance(12, 1)).toBe(false);
+        expect(isWithinScrollTolerance(-4, 1)).toBe(false);
     });
 });
