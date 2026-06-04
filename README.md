@@ -57,9 +57,9 @@
 - Background notifications plus reliable cross-tab session activity tracking
 - Built-in self-update + restart flow that keeps your server settings intact
 
-### Desktop (macOS)
+### Desktop (Electron)
 
-- Native macOS menu integration with polished app actions and deep-link handling
+- Native desktop menu integration with polished app actions and deep-link handling
 - Multi-window support for parallel project/session workflows
 - "Open In" shortcuts for Finder, Terminal, and your preferred editor
 - Fast switching between local and remote instances
@@ -72,14 +72,6 @@
 - Right-click actions to add context, explain selections, and improve code in-place
 - In-extension settings, responsive layout, and theme mapping that matches your editor
 - Hardened runtime lifecycle and health checks for faster startup and fewer stuck reconnect states
-
-### Custom Themes
-
-- **Use it from anywhere** - Cloudflare tunnel with QR code onboarding. Scan, connect, code from your couch.
-- **Branchable chat timeline** - Undo, redo, fork from any turn. Explore different approaches without losing your place.
-- **GitHub-native workflows** - Start sessions from issues and PRs with context already attached. Review checks, merge - all in-app.
-- **Project Actions** - Run dev servers, configure SSH port forwarding, open remote URLs locally. Your project commands, one click away.
-- **Connect to remote machines** - Desktop app connects to remote OpenChamber instances over SSH, with dedicated lifecycle and UX flows.
 
 ## Quick Start
 
@@ -349,14 +341,14 @@ chown -R 1000:1000 data/
 </details>
 
 <details>
-<summary><strong>Desktop (macOS)</strong></summary>
+<summary><strong>Desktop (Electron)</strong></summary>
 
 - Connect to remote OpenChamber instances over SSH with dedicated lifecycle flows
 - Project Actions: run dev servers, SSH port forwarding, open remote URLs locally
 - Multi-window support for parallel project workflows
 - "Open In" shortcuts for Finder, Terminal, and your preferred editor
 - Fast switching between local and remote instances
-- Native macOS menu, deep-link handling, and polished startup
+- Native desktop menu integration, deep-link handling, and polished startup
 
 </details>
 
@@ -411,27 +403,7 @@ Active development. Here's what's being worked on or planned:
 
 ## Recent Changes
 
-### v1.20.2 — StatusBar & i18n Fix
-
-**Bug Fixes:**
-
-- **Session rename now works reliably** — the rename feature in the sidebar previously failed silently due to three root causes:
-  - SDK errors were silently swallowed by `updateSessionTitle`, causing the edit mode to close as if the rename succeeded
-  - Directory resolution could fall back to the wrong directory for sessions in non-current worktrees
-  - Empty title submissions closed the edit mode with no user feedback
-- `shareSession` and `unshareSession` now properly throw on SDK errors instead of silently returning `null`
-
-**Performance:**
-
-- Eliminated O(n) array clone on the `message.part.delta` hot path (~60 events/sec during streaming), reducing GC pressure
-- `message.part.updated` handler now only clones the parts array when structural mutations (splice) are needed
-- Session status updates use targeted `Object.assign` instead of spreading the entire status map
-
-**Code Quality:**
-
-- Extracted `formatSdkError` helper to deduplicate SDK error handling across mutation actions
-- Replaced magic numbers with named constants (`DEFAULT_ABORT_PROMPT_DURATION_MS`, `DEFAULT_CONTEXT_THRESHOLD_TOKENS`, `TEXT_PREVIEW_LENGTH`)
-- Added i18n keys for rename error/empty-title feedback in 7 languages
+See [CHANGELOG.md](./CHANGELOG.md) for release notes and notable changes.
 
 ## Acknowledgments
 
