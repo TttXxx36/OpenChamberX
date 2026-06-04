@@ -43,9 +43,8 @@ test('Windows NSIS installer supports clean upgrades without deleting user data'
 
   assert.match(installerScript, /customInit/);
   assert.match(installerScript, /taskkill.*OpenChamber\.exe/);
-  assert.match(installerScript, /OpenChamberIsExistingInstall/);
-  assert.match(installerScript, /Removing old OpenChamber application files while preserving user data/);
-  assert.doesNotMatch(installerScript, /customHeader|nsDialogs|OpenChamberCleanUpgradePage/);
+  assert.match(installerScript, /customInstall/);
+  assert.match(installerScript, /built-in uninstallOldVersion/);
   assert.doesNotMatch(installerScript, /\$APPDATA|\$LOCALAPPDATA|%APPDATA%|%LOCALAPPDATA%|AppData|userData/i);
   assert.doesNotMatch(installerScript, /Delete "\$INSTDIR\\\*\.json"/);
 });
