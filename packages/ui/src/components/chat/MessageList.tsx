@@ -16,6 +16,7 @@ import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/
 import { streamPerfCount, streamPerfMeasure } from '@/stores/utils/streamDebug';
 import type { StreamPhase } from './message/types';
 import { normalizeParts } from './message/partUtils';
+import { getCenteredScrollTop } from './MessageList.logic';
 
 const MESSAGE_LIST_VIRTUALIZE_THRESHOLD = 5;
 const MESSAGE_LIST_OVERSCAN = 6;
@@ -1494,13 +1495,13 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return container.querySelector(`[data-message-id="${messageId}"]`);
     }, [resolveScrollContainer]);
 
-    const scrollHistoryIndexIntoView = React.useCallback((index: number, behavior: ScrollBehavior = 'auto') => {
+    const scrollHistoryIndexIntoView = React.useCallback((index: number, behavior: ScrollBehavior = 'auto', align: 'start' | 'center' = 'start') => {
         if (!shouldVirtualizeHistory || index < 0 || index >= historyEntries.length) {
             return false;
         }
 
         const virtualizerBehavior = behavior === 'smooth' ? 'smooth' : 'auto';
-        historyVirtualizer.scrollToIndex(index, { align: 'start', behavior: virtualizerBehavior });
+        historyVirtualizer.scrollToIndex(index, { align, behavior: virtualizerBehavior });
         return true;
     }, [historyEntries.length, historyVirtualizer, shouldVirtualizeHistory]);
 
@@ -1516,8 +1517,13 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
         const containerRect = container.getBoundingClientRect();
         const messageRect = messageElement.getBoundingClientRect();
-        const offset = 50;
-        const top = messageRect.top - containerRect.top + container.scrollTop - offset;
+        const top = getCenteredScrollTop({
+            containerTop: containerRect.top,
+            containerHeight: containerRect.height,
+            containerScrollTop: container.scrollTop,
+            messageTop: messageRect.top,
+            messageHeight: messageRect.height,
+        });
         container.scrollTo({ top, behavior });
         return true;
     }, [findMessageElement, resolveScrollContainer]);
@@ -1564,7 +1570,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     || (
                         trailingStreamingEntry !== undefined && index >= historyEntries.length
                             ? false
-                            : scrollHistoryIndexIntoView(index, behavior)
+                            : scrollHistoryIndexIntoView(index, behavior, 'center')
                     );
             },
 
