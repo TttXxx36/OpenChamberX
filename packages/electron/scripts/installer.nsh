@@ -1,15 +1,7 @@
 !include LogicLib.nsh
-!include nsDialogs.nsh
-
-Var OpenChamberCleanUpgradeCheckbox
-Var OpenChamberCleanUpgradeChoice
 
 !macro customInit
   nsExec::Exec '"$SYSDIR\taskkill.exe" /f /im OpenChamber.exe'
-!macroend
-
-!macro customHeader
-  Page custom OpenChamberCleanUpgradePageCreate OpenChamberCleanUpgradePageLeave
 !macroend
 
 Function OpenChamberIsExistingInstall
@@ -30,35 +22,6 @@ Function OpenChamberIsExistingInstall
 
   notExisting:
   Push 0
-FunctionEnd
-
-Function OpenChamberCleanUpgradePageCreate
-  Call OpenChamberIsExistingInstall
-  Pop $0
-  StrCmp $0 1 0 skipPage
-
-  nsDialogs::Create 1018
-  Pop $0
-  ${If} $0 == error
-    Abort
-  ${EndIf}
-
-  ${NSD_CreateLabel} 0 0 100% 28u "OpenChamber X is already installed in this folder. You can remove old application files before installing this version. User data, settings, sessions, and caches are preserved."
-  Pop $0
-
-  ${NSD_CreateCheckbox} 0 42u 100% 12u "Remove old application files before installing (preserves user data)"
-  Pop $OpenChamberCleanUpgradeCheckbox
-  ${NSD_Check} $OpenChamberCleanUpgradeCheckbox
-
-  nsDialogs::Show
-  Return
-
-  skipPage:
-  Abort
-FunctionEnd
-
-Function OpenChamberCleanUpgradePageLeave
-  ${NSD_GetState} $OpenChamberCleanUpgradeCheckbox $OpenChamberCleanUpgradeChoice
 FunctionEnd
 
 !ifndef BUILD_UNINSTALLER
@@ -92,7 +55,9 @@ FunctionEnd
 !endif
 
 !macro customInstall
-  StrCmp $OpenChamberCleanUpgradeChoice ${BST_CHECKED} 0 done
+  Call OpenChamberIsExistingInstall
+  Pop $0
+  StrCmp $0 1 0 done
   DetailPrint "Removing old OpenChamber application files while preserving user data..."
   Call OpenChamberRemoveOldApplicationFiles
   done:
