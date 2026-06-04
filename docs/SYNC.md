@@ -75,7 +75,13 @@ git push origin main
   - `upstream_ref`：留空取最新 tag，或填 `v1.13.0` / `024834fc` / `main`
   - `strategy`：默认 `recursive_ours`
 
-**方式 C：本地执行**
+**方式 C：本地执行（Windows）**
+```powershell
+.\scripts\sync-upstream.ps1              # 最新 tag
+.\scripts\sync-upstream.ps1 -Ref v1.13.0 # 指定 tag
+```
+
+**方式 D：本地执行（Linux/macOS）**
 ```bash
 chmod +x scripts/sync-upstream.sh
 ./scripts/sync-upstream.sh              # 最新 tag
@@ -84,11 +90,13 @@ chmod +x scripts/sync-upstream.sh
 
 ### 3.3 处理冲突
 
-**冲突会被自动检测**。workflow 不会强推，而是：
+**冲突会被自动检测**。workflow 使用三段式保护路径策略处理冲突：
 
-1. 在 `.github/sync-config/protected-paths.txt` 列出的保护路径上，**自动采用 fork 版本**
-2. 在其他路径上若仍冲突，**开 Issue** `⚠️ Sync conflict: upstream <tag> (<sha>)` 列出冲突文件
-3. 人工解决后 push 到 `sync/upstream-<tag>-<sha>` 分支，workflow 会自动开 PR
+1. `[PRESERVE]` 路径 → **保留 fork 版本**（`git checkout --ours`）
+2. `[MERGE_SAFE]` 路径 → **冲突时保留 fork**（`git checkout --ours`）
+3. `[STREAM]` 路径 → **直接采用上游**（`git checkout --theirs`）
+4. 不属于以上三类的文件若仍冲突 → **开 Issue** `⚠️ Sync conflict` 列出冲突文件
+5. 人工解决后 push 到同步分支，workflow 会自动开 PR
 
 **人工解决冲突时**，使用 `prompts/merge-upstream.md` 提示词给 AI 辅助：
 
@@ -96,20 +104,42 @@ chmod +x scripts/sync-upstream.sh
 
 ## 4. 保护路径（"保留区"）机制
 
-`protected-paths.txt` 决定哪些文件永远不会被上游覆盖。
+`protected-paths.txt` 采用三段式分类，决定合并时如何处理每个路径的冲突：
 
-当前默认保护范围（已根据 fork 实际差异设置）：
+| 分类 | 行为 | 适用场景 |
+|------|------|----------|
+| `[PRESERVE]` | 完全保留 fork 版本，上游更改忽略 | CI/CD、文档、同步脚本本身 |
+| `[MERGE_SAFE]` | 尝试合并，冲突时保留 fork 版本 | 部分 i18n、Electron 安全网 |
+| `[STREAM]` | 直接采用上游版本覆盖 | Tauri、VSCode 等 fork 不改的区域 |
+
+当前默认配置（已在 `.github/sync-config/protected-paths.txt` 设置）：
+
+### [PRESERVE] 完全保留
 
 | 类别 | 文件 |
 |------|------|
 | **CI/CD** | `.github/workflows/`（8 个自定义 workflow） |
+| **同步配置** | `.github/sync-config/`, `scripts/sync-upstream.*`, `scripts/merge-with-backup.sh` |
+| **文档** | `README.md`, `CHANGELOG.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/`, `prompts/` |
+| **开发工具** | `.opencode/`, `.codegraph/` |
+
+### [MERGE_SAFE] 自动合并，冲突保留 fork
+
+| 类别 | 文件 |
+|------|------|
 | **依赖** | `package.json`（×6）+ `bun.lock` |
 | **构建配置** | `tsconfig.json`, `vite.config.ts`, `vite-theme-plugin.ts`, `postcss.config.js`, `fix-deprecation.js` |
-| **文档** | `README.md`, `CHANGELOG.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/` |
-| **开发工具** | `.opencode/`, `.codegraph/`, **`.agents/`（不拉回）** |
 | **核心重构** | `useUIStore.*`, `useNotificationStore.*`, `formatSdkError.*`, `event-reducer.*`, `session-actions.*` |
-| **多语言** | `i18n/**` |
+| **多语言** | `i18n/messages/*.ts`, `i18n/messages/*.settings.ts` |
 | **Electron** | `electron/main.*`, `electron/preload.*` |
+| **Fork 功能** | `StatusBar.tsx`, `ChatScrollMarkers.tsx`, `ChatContainer.tsx`, `LayoutPage.tsx`, `MainLayout.tsx`, `SettingsView.tsx` |
+
+### [STREAM] 直接采用上游
+
+| 类别 | 文件 |
+|------|------|
+| **Tauri** | `desktop/src-tauri/` |
+| **VSCode** | `vscode/` |
 
 ### 4.1 添加新的保护路径
 
@@ -140,15 +170,16 @@ git commit -am "chore(sync): add new protected path"
 
 ## 5. 合并策略详解
 
-Git merge 提供三种策略（通过 `git merge -X <strategy>` 指定）：
+同步使用 `git merge --no-commit` 分步策略，而非单次 `-X ours/theirs`：
 
-| 策略 | 行为 | 适用场景 |
-|------|------|----------|
-| **`recursive_ours`**（默认） | 冲突时**优先保留 fork** | fork 改动更重要，**最安全** |
-| `recursive_theirs` | 冲突时优先采用上游 | 极少用——会丢 fork 改动 |
-| `ort` | Git 默认智能 3-way | 适合两个分支改动都不多的轻冲突 |
-
-**推荐始终用 `recursive_ours`**，因为 fork 改动是"目的"，上游只是"原料"。
+1. 先执行 `git merge --no-ff --no-commit` 尝试自动合并
+2. 无冲突 → 正常提交
+3. 有冲突 → 按三段式逐文件处理：
+   - `[STREAM]` → `git checkout --theirs`
+   - `[PRESERVE]` → `git checkout --ours`
+   - `[MERGE_SAFE]` → `git checkout --ours`
+   - 其他未分类文件 → 暴露给用户处理
+4. 提交已解决的合并，未解决的通过 Issue 通知
 
 ## 6. 上游重大变更处理手册
 

@@ -169,7 +169,38 @@ v1.12.0 commit `024834fc` 的关键变化：
 
 ---
 
-## 7. 输入"上游变更包"的方式（任选其一）
+## 7. 获取上游变更包
+
+### Windows（PowerShell）
+```powershell
+# 添加 upstream remote（只需一次）
+git remote add upstream https://github.com/openchamber/openchamber.git
+
+# 拉取上游
+git fetch upstream --tags --force --prune
+
+# 查看最新版本 tag
+git tag -l 'v*' --sort=-version:refname | Select-Object -First 1
+
+# 查看上游近 10 个 commit
+git log upstream/main --oneline -10 | Select-Object -First 10
+
+# 导出 diff（从 fork main 到上游最新 tag）
+$LATEST_TAG = git tag -l 'v*' --sort=-version:refname | Select-Object -First 1
+git diff main..upstream/$LATEST_TAG > upstream-changes.diff
+```
+
+### Linux / macOS（Bash）
+```bash
+git remote add upstream https://github.com/openchamber/openchamber.git
+git fetch upstream --tags --force --prune
+git tag -l 'v*' --sort=-version:refname | head -n 1
+git log upstream/main --oneline -10
+LATEST_TAG=$(git tag -l 'v*' --sort=-version:refname | head -n 1)
+git diff main..upstream/$LATEST_TAG > upstream-changes.diff
+```
+
+## 8. 输入"上游变更包"的方式（任选其一）
 
 > 把我这句话替换为实际内容后，再连同上面整段提示词一起发给 AI：
 
