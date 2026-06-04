@@ -184,7 +184,6 @@ const ChatViewport = React.memo(({
   scrollToBottom,
   sessionQuestions,
   sessionPermissions,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isProgrammaticFollowActive,
 }: ChatViewportProps) => {
     const focusScrollContainer = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
