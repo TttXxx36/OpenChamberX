@@ -127,7 +127,10 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "OpenChamber",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "deleteAppDataOnUninstall": false,
+      "closeRunningApp": true,
+      "include": "scripts/installer.nsh"
     },
     "portable": {
       "artifactName": "${productName}-${version}-${arch}-portable.${ext}"

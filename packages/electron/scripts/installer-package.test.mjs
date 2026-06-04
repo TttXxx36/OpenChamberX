@@ -33,6 +33,21 @@ test('packaged web assets live inside app.asar instead of extraResources', () =>
   assert.doesNotMatch(mainScript, /electronNet\.fetch\(pathToFileURL\(filePath\)/);
 });
 
+test('Windows NSIS installer supports clean upgrades without deleting user data', () => {
+  const packageJson = JSON.parse(readText('package.json'));
+  const nsis = packageJson.build.nsis;
+  const installerScript = readText('scripts/installer.nsh');
+
+  assert.equal(nsis.include, 'scripts/installer.nsh');
+  assert.equal(nsis.deleteAppDataOnUninstall, false);
+  assert.equal(nsis.closeRunningApp, true);
+
+  assert.match(installerScript, /Remove old application files before installing/);
+  assert.match(installerScript, /\$INSTDIR/);
+  assert.doesNotMatch(installerScript, /\$APPDATA|\$LOCALAPPDATA|%APPDATA%|%LOCALAPPDATA%|AppData|userData/i);
+  assert.doesNotMatch(installerScript, /Delete "\$INSTDIR\\\*\.json"/);
+});
+
 test('Electron native rebuild skips Bun-only PTY backend', () => {
   const rebuildScript = readText('scripts/rebuild-native.mjs');
 
