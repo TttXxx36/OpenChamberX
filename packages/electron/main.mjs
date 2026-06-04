@@ -7,7 +7,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile, spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import updaterPkg from 'electron-updater';
 import { ElectronSshManager } from './ssh-manager.mjs';
@@ -794,8 +794,10 @@ const detectLanIPv4Address = async () => {
 
 const buildLocalUrl = (port) => `http://127.0.0.1:${port}`;
 
-const resourceRoot = () => isDev ? path.join(__dirname, 'resources') : process.resourcesPath;
-const resolveWebDistDir = () => path.join(resourceRoot(), 'web-dist');
+const resolveWebDistDir = () => {
+  const root = isDev ? path.join(__dirname, 'resources') : path.join(app.getAppPath(), 'resources');
+  return path.join(root, 'web-dist');
+};
 const shouldUsePackagedUi = () => {
   if (process.env.OPENCHAMBER_ELECTRON_LOAD_SERVER_UI === '1') return false;
   if (process.env.OPENCHAMBER_ELECTRON_USE_BUNDLED_UI === '1') return true;
@@ -811,6 +813,26 @@ const injectRuntimeConfigIntoHtml = (html) => {
   if (html.includes('<head>')) return html.replace('<head>', `<head>${initScript}`);
   if (html.includes('</head>')) return html.replace('</head>', `${initScript}</head>`);
   return `${initScript}${html}`;
+};
+
+const WEB_ASSET_CONTENT_TYPES = new Map([
+  ['.css', 'text/css; charset=utf-8'],
+  ['.eot', 'application/vnd.ms-fontobject'],
+  ['.html', 'text/html; charset=utf-8'],
+  ['.ico', 'image/x-icon'],
+  ['.js', 'text/javascript; charset=utf-8'],
+  ['.json', 'application/json; charset=utf-8'],
+  ['.otf', 'font/otf'],
+  ['.png', 'image/png'],
+  ['.svg', 'image/svg+xml; charset=utf-8'],
+  ['.ttf', 'font/ttf'],
+  ['.wasm', 'application/wasm'],
+  ['.woff', 'font/woff'],
+  ['.woff2', 'font/woff2'],
+]);
+
+const getWebAssetContentType = (filePath) => {
+  return WEB_ASSET_CONTENT_TYPES.get(path.extname(filePath).toLowerCase()) || 'application/octet-stream';
 };
 
 const registerPackagedUiProtocol = () => {
@@ -837,7 +859,8 @@ const registerPackagedUiProtocol = () => {
           const body = injectRuntimeConfigIntoHtml(html);
           return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
         }
-        return electronNet.fetch(pathToFileURL(filePath).toString());
+        const body = await fsp.readFile(filePath);
+        return new Response(body, { headers: { 'Content-Type': getWebAssetContentType(filePath) } });
       }
     } catch {
     }

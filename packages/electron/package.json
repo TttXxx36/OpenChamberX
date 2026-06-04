@@ -41,16 +41,19 @@
     "files": [
       "dist-bundle/main.mjs",
       "preload.mjs",
+      "resources/web-dist/**",
       "!**/*.pdb",
       "!**/node-pty/prebuilds/win32-arm64/**",
       "!**/node-pty/third_party/**/win10-arm64/**",
       "!**/bun-pty/**"
     ],
+    "asarUnpack": [
+      "**/*.node",
+      "**/*.dll",
+      "**/node-pty/prebuilds/win32-x64/conpty/**",
+      "**/node-pty/build/Release/conpty/**"
+    ],
     "extraResources": [
-      {
-        "from": "resources/web-dist",
-        "to": "web-dist"
-      },
       {
         "from": "resources/icons/icon.ico",
         "to": "icons/icon.ico"

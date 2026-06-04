@@ -20,6 +20,19 @@ test('Windows installer package excludes debug and non-target native payloads', 
   assert.ok(files.includes('!**/bun-pty/**'));
 });
 
+test('packaged web assets live inside app.asar instead of extraResources', () => {
+  const packageJson = JSON.parse(readText('package.json'));
+  const files = packageJson.build.files;
+  const extraResources = packageJson.build.extraResources ?? [];
+  const mainScript = readText('main.mjs');
+
+  assert.ok(files.includes('resources/web-dist/**'));
+  assert.ok(!extraResources.some((entry) => entry.from === 'resources/web-dist' || entry.to === 'web-dist'));
+  assert.match(mainScript, /app\.getAppPath\(\).*resources.*web-dist/s);
+  assert.match(mainScript, /fsp\.readFile\(filePath\)/);
+  assert.doesNotMatch(mainScript, /electronNet\.fetch\(pathToFileURL\(filePath\)/);
+});
+
 test('Electron native rebuild skips Bun-only PTY backend', () => {
   const rebuildScript = readText('scripts/rebuild-native.mjs');
 
