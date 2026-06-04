@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { GitStatus } from '@/lib/api/types';
-import { useGitStore } from './useGitStore';
+import { selectIsGitRepo, useGitStore } from './useGitStore';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -21,8 +21,8 @@ const createDeferred = <T>(): Deferred<T> => {
   return { promise, resolve, reject };
 };
 
-const createStatus = (diffStats?: GitStatus['diffStats'], files: GitStatus['files'] = []): GitStatus => ({
-  current: 'main',
+const createStatus = (diffStats?: GitStatus['diffStats'], files: GitStatus['files'] = [], current = 'main'): GitStatus => ({
+  current,
   tracking: null,
   ahead: 0,
   behind: 0,
@@ -249,5 +249,16 @@ describe('useGitStore', () => {
     useGitStore.getState().restoreStatus('/repo', previousStatus);
 
     expect(useGitStore.getState().getDirectoryState('/repo')?.status).toBe(initialStatus);
+  });
+
+  test('selects repo state without depending on branch changes', () => {
+    const directoryStates = new Map([
+      ['/repo', createDirectoryState(createStatus(undefined, [], 'main'))],
+      ['/other', createDirectoryState(createStatus(undefined, [], 'feature'))],
+    ]);
+
+    expect(selectIsGitRepo(directoryStates, '/repo')).toBe(true);
+    expect(selectIsGitRepo(directoryStates, '/missing')).toBeNull();
+    expect(selectIsGitRepo(directoryStates, null)).toBeNull();
   });
 });

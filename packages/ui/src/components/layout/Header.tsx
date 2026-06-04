@@ -21,7 +21,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
 import { formatSessionWorktreeBadge } from '@/sync/session-worktree-contract';
-import { useAllLiveSessions, useSession, useSessionMessagesResolved } from '@/sync/sync-context';
+import { useSession, useSessionMessagesResolved } from '@/sync/sync-context';
 import { getAllSyncSessions } from '@/sync/sync-refs';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
@@ -74,6 +74,7 @@ import { useI18n } from '@/lib/i18n';
 import { formatTime } from '@/lib/format';
 import type { Session } from '@opencode-ai/sdk/v2/client';
 import type { IconName } from "@/components/icon/icons";
+import { resolveHeaderCurrentSession } from './headerSessionResolution';
 
 const DESKTOP_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-interactive-hover transition-colors';
 const MOBILE_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground hover:bg-interactive-hover transition-colors';
@@ -790,8 +791,10 @@ export const Header: React.FC<HeaderProps> = ({
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
   const currentSyncedSession = useSession(currentSessionId ?? null);
-  const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
-  const liveSessions = useAllLiveSessions();
+  const globalCurrentSession = useGlobalSessionsStore((state) => {
+    if (!currentSessionId) return null;
+    return state.activeSessions.find((session) => session.id === currentSessionId) ?? null;
+  });
   const activeProject = useProjectsStore((state) => {
     if (!state.activeProjectId) {
       return null;
@@ -1191,13 +1194,13 @@ export const Header: React.FC<HeaderProps> = ({
   }, [fetchAllQuotas, isUsageRefreshSpinning]);
 
   const currentSessionLive = React.useMemo(() => {
-    if (!currentSessionId) return null;
-    return liveSessions.find((s) => s.id === currentSessionId)
-      ?? globalActiveSessions.find((s) => s.id === currentSessionId)
-      ?? currentSyncedSession
-      ?? getAllSyncSessions().find((s) => s.id === currentSessionId)
-      ?? null;
-  }, [currentSessionId, currentSyncedSession, globalActiveSessions, liveSessions]);
+    return resolveHeaderCurrentSession({
+      currentSessionId,
+      syncedSession: currentSyncedSession,
+      globalSession: globalCurrentSession,
+      fallbackSessions: getAllSyncSessions(),
+    });
+  }, [currentSessionId, currentSyncedSession, globalCurrentSession]);
 
   const lastResolvedSessionRef = React.useRef<{
     sessionId: string;

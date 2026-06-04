@@ -60,6 +60,13 @@ import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
 import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { useI18n } from '@/lib/i18n';
 import { normalizeFilesViewTargetPath, resolveFilesViewEffectiveSelectedPath } from './filesViewSelection';
+import { shouldShowFilesViewRetry } from './filesViewErrorState';
+import {
+  buildSidebarFolderBadgeIndex,
+  buildSidebarGitStatusIndex,
+  getSidebarFileStatus,
+  type SidebarFileStatus,
+} from '@/components/layout/sidebarGitStatus';
 
 type FileNode = {
   name: string;
@@ -219,9 +226,7 @@ const getDisplayPath = (root: string | null, path: string): string => {
 
 const DEFAULT_IGNORED_DIR_NAMES = new Set(['node_modules']);
 
-type FileStatus = 'open' | 'modified' | 'git-modified' | 'git-added' | 'git-deleted';
-
-const FileStatusDot: React.FC<{ status: FileStatus }> = ({ status }) => {
+const FileStatusDot: React.FC<{ status: SidebarFileStatus }> = ({ status }) => {
   const color = {
     open: 'var(--status-info)',
     modified: 'var(--status-warning)',
@@ -366,7 +371,7 @@ interface FileRowProps {
   isActive: boolean;
   isMobile: boolean;
   alwaysShowActions: boolean;
-  status?: FileStatus | null;
+  status?: SidebarFileStatus | null;
   badge?: { modified: number; added: number } | null;
   permissions: {
     canRename: boolean;
@@ -1745,6 +1750,16 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
       });
   }, [expandPaths, isMobile, loadDirectory, mode, normalizedTargetPath, readFile, readFileStat, removeOpenPathsByPrefix, root, runtime.isDesktop, searchQuery, setSelectedPath, t]);
 
+  const showFileErrorRetry = shouldShowFilesViewRetry({
+    fileError,
+    selectedPath: selectedFile?.path ?? null,
+    fileLoading,
+  });
+  const handleRetrySelectedFile = React.useCallback(() => {
+    if (!selectedFile) return;
+    void loadSelectedFile(selectedFile);
+  }, [loadSelectedFile, selectedFile]);
+
   const ensurePathVisible = React.useCallback(async (targetPath: string, includeTarget: boolean) => {
     if (!root) {
       return;
@@ -2020,37 +2035,24 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
     }
   }, [getNextOpenFile, handleSelectFile, isDirty, isMobile, openFiles, removeOpenPath, root, selectedFile?.path, setSelectedPath]);
 
-  const getFileStatus = React.useCallback((path: string): FileStatus | null => {
-    // Check open status
-    if (openPaths.includes(path)) return 'open';
-    
-    // Check git status
-    if (gitStatus?.files) {
-      const relative = path.startsWith(root + '/') ? path.slice(root.length + 1) : path;
-      const file = gitStatus.files.find(f => f.path === relative);
-      if (file) {
-        if (file.index === 'A' || file.working_dir === '?') return 'git-added';
-        if (file.index === 'D') return 'git-deleted';
-        if (file.index === 'M' || file.working_dir === 'M') return 'git-modified';
-      }
-    }
-    return null;
-  }, [openPaths, gitStatus, root]);
+  const openPathSet = React.useMemo(() => new Set(openPaths), [openPaths]);
+  const gitStatusByPath = React.useMemo(
+    () => buildSidebarGitStatusIndex(gitStatus?.files),
+    [gitStatus?.files],
+  );
+  const gitFolderBadges = React.useMemo(
+    () => buildSidebarFolderBadgeIndex(gitStatus?.files),
+    [gitStatus?.files],
+  );
+
+  const getFileStatus = React.useCallback((path: string): SidebarFileStatus | null => (
+    getSidebarFileStatus(path, root, openPathSet, gitStatusByPath)
+  ), [gitStatusByPath, openPathSet, root]);
 
   const getFolderBadge = React.useCallback((dirPath: string): { modified: number; added: number } | null => {
-    if (!gitStatus?.files) return null;
-    const relativeDir = dirPath.startsWith(root + '/') ? dirPath.slice(root.length + 1) : dirPath;
-    const prefix = relativeDir ? `${relativeDir}/` : '';
-    
-    let modified = 0, added = 0;
-    for (const f of gitStatus.files) {
-      if (f.path.startsWith(prefix)) {
-        if (f.index === 'M' || f.working_dir === 'M') modified++;
-        if (f.index === 'A' || f.working_dir === '?') added++;
-      }
-    }
-    return modified + added > 0 ? { modified, added } : null;
-  }, [gitStatus, root]);
+    const relativeDir = dirPath.startsWith(`${root}/`) ? dirPath.slice(root.length + 1) : dirPath;
+    return gitFolderBadges.get(relativeDir) ?? null;
+  }, [gitFolderBadges, root]);
 
   const toggleDirectory = React.useCallback(async (dirPath: string) => {
     const normalized = normalizePath(dirPath);
@@ -3238,7 +3240,15 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
                 </div>
               )
           ) : fileError ? (
-            <div className="p-3 typography-ui text-[color:var(--status-error)]">{fileError}</div>
+            <div className="flex flex-col items-start gap-2 p-3 typography-ui text-[color:var(--status-error)]">
+              <span>{fileError}</span>
+              {showFileErrorRetry && (
+                <Button variant="outline" size="xs" className="gap-1.5" onClick={handleRetrySelectedFile}>
+                  <Icon name="refresh" className="size-3.5" />
+                  {t('filesView.tree.actions.refreshTitle')}
+                </Button>
+              )}
+            </div>
           ) : isSelectedImage ? (
             <div className="flex h-full items-center justify-center p-3">
               <img
@@ -3576,7 +3586,15 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
                 </div>
               )
           ) : fileError ? (
-            <div className="p-4 typography-ui text-[color:var(--status-error)]">{fileError}</div>
+            <div className="flex flex-col items-start gap-2 p-4 typography-ui text-[color:var(--status-error)]">
+              <span>{fileError}</span>
+              {showFileErrorRetry && (
+                <Button variant="outline" size="xs" className="gap-1.5" onClick={handleRetrySelectedFile}>
+                  <Icon name="refresh" className="size-3.5" />
+                  {t('filesView.tree.actions.refreshTitle')}
+                </Button>
+              )}
+            </div>
           ) : isSelectedImage ? (
             <div className="flex h-full items-center justify-center p-4">
               <img

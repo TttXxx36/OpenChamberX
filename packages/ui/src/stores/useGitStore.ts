@@ -992,11 +992,13 @@ export const useGitIdentity = (directory: string | null) => {
   });
 };
 
+export const selectIsGitRepo = (directoryStates: Map<string, DirectoryGitState>, directory: string | null) => {
+  if (!directory) return null;
+  return directoryStates.get(directory)?.isGitRepo ?? null;
+};
+
 export const useIsGitRepo = (directory: string | null) => {
-  return useGitStore((state) => {
-    if (!directory) return null;
-    return state.directories.get(directory)?.isGitRepo ?? null;
-  });
+  return useGitStore((state) => selectIsGitRepo(state.directories, directory));
 };
 
 export const useGitFileCount = (directory: string | null) => {

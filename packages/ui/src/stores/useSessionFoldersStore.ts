@@ -54,6 +54,17 @@ let persistFoldersTimer: ReturnType<typeof setTimeout> | undefined;
 let persistCollapsedTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingFoldersMap: SessionFoldersMap | null = null;
 let pendingCollapsedIds: Set<string> | null = null;
+let sessionFoldersRevision = 0;
+
+export const canApplySessionFoldersDiskHydration = ({
+  hydrationStartRevision,
+  currentRevision,
+  hasDiskData,
+}: {
+  hydrationStartRevision: number;
+  currentRevision: number;
+  hasDiskData: boolean;
+}): boolean => hasDiskData && hydrationStartRevision === currentRevision;
 
 const isVSCodeWebview = (): boolean => {
   if (typeof window === 'undefined') {
@@ -200,6 +211,7 @@ if (typeof window !== 'undefined') {
 }
 
 const persistState = (foldersMap: SessionFoldersMap, collapsedFolderIds: Set<string>): void => {
+  sessionFoldersRevision += 1;
   persistFolders(foldersMap);
   persistCollapsed(collapsedFolderIds);
   schedulePersistToDisk(foldersMap, collapsedFolderIds);
@@ -501,6 +513,7 @@ const hydrateSessionFoldersFromDisk = async (): Promise<void> => {
   }
 
   diskHydrationInFlight = true;
+  const hydrationStartRevision = sessionFoldersRevision;
 
   try {
     const response = await runtimeFetch(SESSION_FOLDERS_API_PATH).catch(() => null);
@@ -524,8 +537,11 @@ const hydrateSessionFoldersFromDisk = async (): Promise<void> => {
       ? new Set(parsed.collapsedFolderIds.filter((value): value is string => typeof value === 'string'))
       : new Set<string>();
 
-    const hasDiskData = Object.keys(diskFolders).length > 0 || diskCollapsed.size > 0;
-    if (!hasDiskData) {
+    if (!canApplySessionFoldersDiskHydration({
+      hydrationStartRevision,
+      currentRevision: sessionFoldersRevision,
+      hasDiskData: Object.keys(diskFolders).length > 0 || diskCollapsed.size > 0,
+    })) {
       return;
     }
 

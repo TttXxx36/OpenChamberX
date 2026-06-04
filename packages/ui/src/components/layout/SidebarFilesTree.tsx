@@ -36,6 +36,12 @@ import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
 import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
 import { useI18n } from '@/lib/i18n';
+import {
+  buildSidebarFolderBadgeIndex,
+  buildSidebarGitStatusIndex,
+  getSidebarFileStatus,
+  type SidebarFileStatus,
+} from './sidebarGitStatus';
 
 type FileNode = {
   name: string;
@@ -103,9 +109,7 @@ const getFileIcon = (filePath: string, extension?: string): React.ReactNode => {
 
 // --- Git status indicators (matching FilesView) ---
 
-type FileStatus = 'open' | 'modified' | 'git-modified' | 'git-added' | 'git-deleted';
-
-const FileStatusDot: React.FC<{ status: FileStatus }> = ({ status }) => {
+const FileStatusDot: React.FC<{ status: SidebarFileStatus }> = ({ status }) => {
   const color = {
     open: 'var(--status-info)',
     modified: 'var(--status-warning)',
@@ -124,7 +128,7 @@ interface FileRowProps {
   root: string;
   isExpanded: boolean;
   isActive: boolean;
-  status?: FileStatus | null;
+  status?: SidebarFileStatus | null;
   badge?: { modified: number; added: number } | null;
   permissions: {
     canRename: boolean;
@@ -584,35 +588,23 @@ export const SidebarFilesTree: React.FC = () => {
 
   // --- Git status helpers (matching FilesView) ---
 
-  const getFileStatus = React.useCallback((path: string): FileStatus | null => {
-    if (openContextFilePaths.has(path)) return 'open';
+  const gitStatusByPath = React.useMemo(
+    () => buildSidebarGitStatusIndex(gitStatus?.files),
+    [gitStatus?.files],
+  );
+  const gitFolderBadges = React.useMemo(
+    () => buildSidebarFolderBadgeIndex(gitStatus?.files),
+    [gitStatus?.files],
+  );
 
-    if (gitStatus?.files) {
-      const relative = path.startsWith(root + '/') ? path.slice(root.length + 1) : path;
-      const file = gitStatus.files.find((f) => f.path === relative);
-      if (file) {
-        if (file.index === 'A' || file.working_dir === '?') return 'git-added';
-        if (file.index === 'D') return 'git-deleted';
-        if (file.index === 'M' || file.working_dir === 'M') return 'git-modified';
-      }
-    }
-    return null;
-  }, [openContextFilePaths, gitStatus, root]);
+  const getFileStatus = React.useCallback((path: string): SidebarFileStatus | null => (
+    getSidebarFileStatus(path, root, openContextFilePaths, gitStatusByPath)
+  ), [gitStatusByPath, openContextFilePaths, root]);
 
   const getFolderBadge = React.useCallback((dirPath: string): { modified: number; added: number } | null => {
-    if (!gitStatus?.files) return null;
-    const relativeDir = dirPath.startsWith(root + '/') ? dirPath.slice(root.length + 1) : dirPath;
-    const prefix = relativeDir ? `${relativeDir}/` : '';
-
-    let modified = 0, added = 0;
-    for (const f of gitStatus.files) {
-      if (f.path.startsWith(prefix)) {
-        if (f.index === 'M' || f.working_dir === 'M') modified++;
-        if (f.index === 'A' || f.working_dir === '?') added++;
-      }
-    }
-    return modified + added > 0 ? { modified, added } : null;
-  }, [gitStatus, root]);
+    const relativeDir = dirPath.startsWith(`${root}/`) ? dirPath.slice(root.length + 1) : dirPath;
+    return gitFolderBadges.get(relativeDir) ?? null;
+  }, [gitFolderBadges, root]);
 
   // --- File operations ---
 

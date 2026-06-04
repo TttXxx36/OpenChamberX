@@ -62,7 +62,7 @@ import {
   deriveActiveNowSessions,
   deriveLiveActiveNowSessions,
 } from './sidebar/activitySections';
-import { useActiveNowStore } from '@/stores/useActiveNowStore';
+import { useActiveNowStore, useVisibleActiveNowEntries } from '@/stores/useActiveNowStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import {
   compareSessionsByPinnedAndTime,
@@ -170,7 +170,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     () => new Map(),
   );
   const safeStorage = React.useMemo(() => getSafeStorage(), []);
-  const activeNowEntries = useActiveNowStore((state) => state.entries);
   const addActiveNowSessionToStore = useActiveNowStore((state) => state.addSession);
   const pruneActiveNowEntriesInStore = useActiveNowStore((state) => state.prune);
   const [collapsedProjects, setCollapsedProjects] = React.useState<Set<string>>(new Set());
@@ -958,6 +957,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [projectSections, homeDirectory]);
 
   const showRecentSection = useSessionDisplayStore((state) => state.showRecentSection);
+  const activeNowEntries = useVisibleActiveNowEntries(showRecentSection);
   const showArchivedSessions = useSessionDisplayStore((state) => state.showArchivedSessions);
 
   const activeNowSessions = React.useMemo(() => {

@@ -4,7 +4,7 @@ import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { ProjectNotesTodoPanel } from '@/components/session/ProjectNotesTodoPanel';
 import { GitView } from '@/components/views/GitView';
 import { Icon } from "@/components/icon/Icon";
-import { useGitStore } from '@/stores/useGitStore';
+import { useIsGitRepo, useGitStore } from '@/stores/useGitStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -44,7 +44,6 @@ export const ProjectContextPanel: React.FC = () => {
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const projects = useProjectsStore((state) => state.projects);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
-  const gitDirectories = useGitStore((state) => state.directories);
 
   const activeProject = React.useMemo(() => {
     if (activeProjectId) {
@@ -72,12 +71,8 @@ export const ProjectContextPanel: React.FC = () => {
       || activeProject.path;
   }, [activeProject, homeDirectory]);
 
-  const canCreateWorktree = React.useMemo(() => {
-    if (!activeProject) {
-      return false;
-    }
-    return gitDirectories.get(activeProject.path)?.isGitRepo === true;
-  }, [activeProject, gitDirectories]);
+  const activeProjectIsGitRepo = useIsGitRepo(activeProject?.path ?? null);
+  const canCreateWorktree = activeProjectIsGitRepo === true;
 
   return (
     <div className="h-full min-h-0 overflow-auto bg-sidebar">

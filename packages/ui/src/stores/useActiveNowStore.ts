@@ -17,6 +17,11 @@ type ActiveNowStore = {
 };
 
 const safeStorage = getSafeStorage();
+const EMPTY_ACTIVE_NOW_ENTRIES: ActiveNowEntry[] = [];
+
+export const selectActiveNowEntries = (entries: ActiveNowEntry[], enabled: boolean): ActiveNowEntry[] => {
+  return enabled ? entries : EMPTY_ACTIVE_NOW_ENTRIES;
+};
 
 export const useActiveNowStore = create<ActiveNowStore>((set, get) => ({
   entries: readActiveNowEntries(safeStorage),
@@ -44,3 +49,7 @@ export const useActiveNowStore = create<ActiveNowStore>((set, get) => ({
     persistActiveNowEntries(safeStorage, pruned);
   },
 }));
+
+export const useVisibleActiveNowEntries = (enabled: boolean): ActiveNowEntry[] => {
+  return useActiveNowStore((state) => selectActiveNowEntries(state.entries, enabled));
+};
