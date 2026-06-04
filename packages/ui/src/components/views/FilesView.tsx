@@ -768,10 +768,13 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
   const updateEditorTabsOverflow = React.useCallback(() => {
     const el = editorTabsScrollRef.current;
     if (!el) return;
-    setEditorTabsOverflow({
+    const next = {
       left: el.scrollLeft > 2,
       right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
-    });
+    };
+    setEditorTabsOverflow((previous) => (
+      previous.left === next.left && previous.right === next.right ? previous : next
+    ));
   }, []);
   const updateEditorTabsOverflowRef = React.useRef(updateEditorTabsOverflow);
   updateEditorTabsOverflowRef.current = updateEditorTabsOverflow;

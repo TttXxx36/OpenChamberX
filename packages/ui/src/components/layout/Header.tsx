@@ -75,6 +75,7 @@ import { formatTime } from '@/lib/format';
 import type { Session } from '@opencode-ai/sdk/v2/client';
 import type { IconName } from "@/components/icon/icons";
 import { resolveHeaderCurrentSession } from './headerSessionResolution';
+import { getRightSidebarToggleLabel } from './rightSidebarToggleLabels';
 
 const DESKTOP_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-interactive-hover transition-colors';
 const MOBILE_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground hover:bg-interactive-hover transition-colors';
@@ -1078,12 +1079,14 @@ export const Header: React.FC<HeaderProps> = ({
 
   const rateLimitGroups = React.useMemo(() => {
     const groups: RateLimitGroup[] = [];
+    const enabledProviderIds = new Set(dropdownProviderIds);
+    const quotaResultsByProvider = new Map(quotaResults.map((entry) => [entry.providerId, entry]));
 
     for (const provider of QUOTA_PROVIDERS) {
-      if (!dropdownProviderIds.includes(provider.id)) {
+      if (!enabledProviderIds.has(provider.id)) {
         continue;
       }
-      const result = quotaResults.find((entry) => entry.providerId === provider.id);
+      const result = quotaResultsByProvider.get(provider.id);
       const windows = (result?.usage?.windows ?? {}) as Record<string, UsageWindow>;
       const models = result?.usage?.models;
       const entries = Object.entries(windows);
@@ -1098,6 +1101,7 @@ export const Header: React.FC<HeaderProps> = ({
       // Add model families if provider has per-model quotas
       if (models && Object.keys(models).length > 0) {
         const providerSelectedModels = selectedModels[provider.id] ?? [];
+        const selectedModelSet = new Set(providerSelectedModels);
         // hasExplicitSelection = true means user has selected specific models to show
         // If the array exists but is empty, treat as "show all" (user cleared selection)
         const hasExplicitSelection = providerSelectedModels.length > 0;
@@ -1114,7 +1118,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           // Filter to selected models only, OR show all if nothing selected
           const selectedModelNames = hasExplicitSelection
-            ? modelNames.filter((m: string) => providerSelectedModels.includes(m))
+            ? modelNames.filter((m: string) => selectedModelSet.has(m))
             : modelNames;
           if (selectedModelNames.length === 0) continue;
 
@@ -1141,7 +1145,7 @@ export const Header: React.FC<HeaderProps> = ({
         // Add "Other" family for remaining models
         const otherModelNames = modelGroups.get(null) ?? [];
         const selectedOtherModels = hasExplicitSelection
-          ? otherModelNames.filter((m: string) => providerSelectedModels.includes(m))
+          ? otherModelNames.filter((m: string) => selectedModelSet.has(m))
           : otherModelNames;
         if (selectedOtherModels.length > 0) {
           const otherModels: Array<[string, UsageWindow]> = [];
@@ -1198,7 +1202,7 @@ export const Header: React.FC<HeaderProps> = ({
       currentSessionId,
       syncedSession: currentSyncedSession,
       globalSession: globalCurrentSession,
-      fallbackSessions: getAllSyncSessions(),
+      fallbackSessions: getAllSyncSessions,
     });
   }, [currentSessionId, currentSyncedSession, globalCurrentSession]);
 
@@ -2250,7 +2254,10 @@ export const Header: React.FC<HeaderProps> = ({
     </div>
   );
 
-  const renderMobile = () => (
+  const renderMobile = () => {
+    const rightSidebarToggleLabel = getRightSidebarToggleLabel(rightDrawerOpen, t);
+
+    return (
     <div className="app-region-drag relative flex items-center gap-2 px-3 py-2 select-none">
       <div className="flex items-center gap-2 shrink-0">
         {/* Use drawer toggle when onToggleLeftDrawer is provided, otherwise use legacy session switcher */}
@@ -2655,13 +2662,13 @@ export const Header: React.FC<HeaderProps> = ({
                       'relative',
                       mobileActiveHeaderItem === 'git' && 'bg-interactive-selection text-interactive-selection-foreground'
                     )}
-                    aria-label={rightDrawerOpen ? 'Close git sidebar' : 'Open git sidebar'}
+                    aria-label={rightSidebarToggleLabel}
                   >
                     <Icon name="layout-right" className="h-5 w-5" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{rightDrawerOpen ? 'Close git sidebar' : 'Open git sidebar'}</p>
+                  <p>{rightSidebarToggleLabel}</p>
                 </TooltipContent>
               </Tooltip>
             ) : null}
@@ -2669,7 +2676,8 @@ export const Header: React.FC<HeaderProps> = ({
         </>
       )}
     </div>
-  );
+    );
+  };
 
   const headerClassName = cn(
     'header-safe-area relative z-10',

@@ -85,14 +85,17 @@ export const ProjectContextPanel: React.FC = () => {
   );
 };
 
-export const RightSidebarTabs: React.FC = () => {
+type RightSidebarTabsProps = {
+  isOpen: boolean;
+};
+
+export const RightSidebarTabs: React.FC<RightSidebarTabsProps> = ({ isOpen }) => {
   const { t } = useI18n();
   const rightSidebarTab = useUIStore((state) => state.rightSidebarTab);
   const setRightSidebarTab = useUIStore((state) => state.setRightSidebarTab);
-  const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
   const directory = useEffectiveDirectory();
 
-  useRightSidebarGitSync(directory, isRightSidebarOpen);
+  useRightSidebarGitSync(directory, isOpen && rightSidebarTab === 'git');
 
   const tabItems = React.useMemo(() => [
     {

@@ -1,12 +1,13 @@
 import React from 'react';
 import { cn, fuzzyMatch } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionMessages } from '@/sync/sync-context';
+import { useSessionMessageCount } from '@/sync/sync-context';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
+import { hasMessagesForCommandAutocomplete } from './commandAvailability';
 
 type CommandSource = 'openchamber' | 'opencode' | 'skill';
 
@@ -60,8 +61,8 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 }, ref) => {
   const { t } = useI18n();
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const sessionMessages = useSessionMessages(currentSessionId ?? '');
-  const hasMessagesInCurrentSession = sessionMessages.length > 0;
+  const sessionMessageCount = useSessionMessageCount(currentSessionId);
+  const hasMessagesInCurrentSession = hasMessagesForCommandAutocomplete(sessionMessageCount);
   const hasSession = Boolean(currentSessionId);
   const hasNewSessionDraft = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
   const canStartSessionCommand = hasSession || hasNewSessionDraft;

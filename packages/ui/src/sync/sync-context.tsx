@@ -2367,14 +2367,19 @@ export function buildSessionMessageRecordsSnapshot(
   }
 }
 
-export function useSessionMessageCount(sessionID: string, directory?: string): number {
-  return useDirectorySync(
-    useCallback((state: State) => {
-      if (!sessionID) return 0
-      return state.message[sessionID]?.length ?? 0
-    }, [sessionID]),
-    directory,
-  )
+export const shouldSubscribeToSessionMessageCount = (sessionID?: string | null): boolean => Boolean(sessionID)
+
+export function useSessionMessageCount(sessionID?: string | null, directory?: string): number {
+  const store = useDirectoryStore(directory)
+  const getSnapshot = useCallback(() => {
+    if (!sessionID) return 0
+    return store.getState().message[sessionID]?.length ?? 0
+  }, [sessionID, store])
+  const subscribe = useCallback((notify: () => void) => {
+    if (!shouldSubscribeToSessionMessageCount(sessionID)) return () => undefined
+    return store.subscribe(notify)
+  }, [sessionID, store])
+  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
 export function useSessionTextMessages(sessionID: string, directory?: string): SessionTextMessage[] {

@@ -43,4 +43,20 @@ describe('resolveHeaderCurrentSession', () => {
       fallbackSessions: [session('other', 'other'), fallback],
     })).toBe(fallback);
   });
+
+  test('supports lazy fallback session resolution', () => {
+    const fallback = session('ses_a', 'snapshot');
+    let fallbackCalls = 0;
+
+    expect(resolveHeaderCurrentSession({
+      currentSessionId: 'ses_a',
+      syncedSession: undefined,
+      globalSession: null,
+      fallbackSessions: () => {
+        fallbackCalls += 1;
+        return [fallback];
+      },
+    })).toBe(fallback);
+    expect(fallbackCalls).toBe(1);
+  });
 });

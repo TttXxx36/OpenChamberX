@@ -17,6 +17,7 @@ const getSessionUpdatedAt = (session: Session): number => {
 const getSessionSignature = (session: Session): string => {
   const directory = (session as Session & { directory?: string | null }).directory ?? ''
   const parentID = (session as Session & { parentID?: string | null }).parentID ?? ''
+  const projectWorktree = (session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? ''
   return [
     session.id,
     session.title ?? '',
@@ -25,6 +26,7 @@ const getSessionSignature = (session: Session): string => {
     session.time?.archived ?? 0,
     directory,
     parentID,
+    projectWorktree,
     session.share?.url ?? '',
   ].join('|')
 }
@@ -62,6 +64,17 @@ const areStatusesEquivalent = (left: SessionStatus | undefined, right: SessionSt
 type StatusCandidate = {
   status: SessionStatus
   sessionUpdatedAt: number
+}
+
+const createSessionUpdatedAtIndex = (sessions: Session[]): Map<string, number> => {
+  const index = new Map<string, number>()
+  for (const session of sessions) {
+    if (!session?.id) {
+      continue
+    }
+    index.set(session.id, getSessionUpdatedAt(session))
+  }
+  return index
 }
 
 const getStatusCandidate = (state: LiveStateSlice, sessionId: string): StatusCandidate | null => {
@@ -158,10 +171,21 @@ export function aggregateLiveSessionStatuses(states: Iterable<LiveStateSlice>): 
   const candidates = new Map<string, StatusCandidate>()
 
   for (const state of states) {
-    for (const sessionId of Object.keys(state.session_status ?? {})) {
-      const next = getStatusCandidate(state, sessionId)
-      if (!next) {
+    const statusKeys = Object.keys(state.session_status ?? {})
+    if (statusKeys.length === 0) {
+      continue
+    }
+
+    const sessionUpdatedAtById = createSessionUpdatedAtIndex(state.session)
+    for (const sessionId of statusKeys) {
+      const status = state.session_status?.[sessionId]
+      if (!status) {
         continue
+      }
+
+      const next = {
+        status,
+        sessionUpdatedAt: sessionUpdatedAtById.get(sessionId) ?? -1,
       }
 
       const current = candidates.get(sessionId)

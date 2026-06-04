@@ -9,11 +9,11 @@ export const resolveHeaderCurrentSession = ({
   currentSessionId: string | null | undefined;
   syncedSession: Session | null | undefined;
   globalSession: Session | null | undefined;
-  fallbackSessions: Session[];
+  fallbackSessions: Session[] | (() => Session[]);
 }): Session | null => {
   if (!currentSessionId) return null;
-  return syncedSession
-    ?? globalSession
-    ?? fallbackSessions.find((session) => session.id === currentSessionId)
-    ?? null;
+  if (syncedSession) return syncedSession;
+  if (globalSession) return globalSession;
+  const sessions = typeof fallbackSessions === 'function' ? fallbackSessions() : fallbackSessions;
+  return sessions.find((session) => session.id === currentSessionId) ?? null;
 };

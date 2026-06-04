@@ -3,6 +3,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   aggregateLiveSessions,
   aggregateLiveSessionStatuses,
+  areSessionListsEquivalent,
   areStatusMapsEquivalent,
   findLiveSession,
   findLiveSessionStatus,
@@ -80,6 +81,50 @@ describe('live aggregate', () => {
     expect(findLiveSessionStatus(states, 'ses-1')?.type).toBe('idle')
   })
 
+  it('indexes sessions once when aggregating statuses', () => {
+    const sessions = Array.from({ length: 20 }, (_, index) => session(`ses-${index}`, '/a', index))
+    let findCalls = 0
+    Object.defineProperty(sessions, 'find', {
+      configurable: true,
+      value: (...args) => {
+        findCalls += 1
+        return Array.prototype.find.apply(sessions, args)
+      },
+    })
+
+    const statuses = aggregateLiveSessionStatuses([
+      {
+        session: sessions,
+        session_status: Object.fromEntries(sessions.map((item) => [item.id, { type: 'busy' }])),
+      },
+    ])
+
+    expect(Object.keys(statuses)).toHaveLength(20)
+    expect(findCalls).toBe(0)
+  })
+
+  it('does not index sessions for states without statuses', () => {
+    const sessions = [session('ses-1', '/a', 10)]
+    let iterations = 0
+    Object.defineProperty(sessions, Symbol.iterator, {
+      configurable: true,
+      value: function* () {
+        iterations += 1
+        yield* Array.prototype[Symbol.iterator].call(this)
+      },
+    })
+
+    const statuses = aggregateLiveSessionStatuses([
+      {
+        session: sessions,
+        session_status: {},
+      },
+    ])
+
+    expect(statuses).toEqual({})
+    expect(iterations).toBe(0)
+  })
+
   it('detects retry metadata changes in status maps', () => {
     const retryStatus = { type: 'retry', message: 'retrying|server|message', attempt: 1, next: 100 }
 
@@ -92,6 +137,13 @@ describe('live aggregate', () => {
       { 'ses-1': retryStatus },
       { 'ses-1': { ...retryStatus, attempt: 2, next: 200 } },
     )).toBe(false)
+  })
+
+  it('detects worktree metadata changes in session lists', () => {
+    const base = session('ses-1', '/a', 20, { project: { worktree: '/a/.worktrees/base' } })
+    const changed = session('ses-1', '/a', 20, { project: { worktree: '/a/.worktrees/changed' } })
+
+    expect(areSessionListsEquivalent([base], [changed])).toBe(false)
   })
 
   it('derives active-now sessions from live statuses instead of persisted history', () => {

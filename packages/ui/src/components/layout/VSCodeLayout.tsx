@@ -684,12 +684,14 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
       entries: Array<[string, UsageWindow]>;
       error?: string;
     }> = [];
+    const enabledProviderIds = new Set(dropdownProviderIds);
+    const quotaResultsByProvider = new Map(quotaResults.map((entry) => [entry.providerId, entry]));
 
     for (const provider of QUOTA_PROVIDERS) {
-      if (!dropdownProviderIds.includes(provider.id)) {
+      if (!enabledProviderIds.has(provider.id)) {
         continue;
       }
-      const result = quotaResults.find((entry) => entry.providerId === provider.id);
+      const result = quotaResultsByProvider.get(provider.id);
       const windows = (result?.usage?.windows ?? {}) as Record<string, UsageWindow>;
       const entries = Object.entries(windows);
       const error = (result && !result.ok && result.configured) ? result.error : undefined;

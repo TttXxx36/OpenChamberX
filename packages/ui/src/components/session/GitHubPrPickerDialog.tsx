@@ -318,7 +318,14 @@ export function GitHubPrPickerDialog({
           ) : null}
 
           {error ? (
-            <div className="text-center text-muted-foreground py-8 break-words">{error}</div>
+            <div className="text-center text-muted-foreground py-8 space-y-3">
+              <div className="break-words">{error}</div>
+              <div className="flex justify-center">
+                <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={isLoading}>
+                  {t('session.githubPrPicker.actions.retry')}
+                </Button>
+              </div>
+            </div>
           ) : null}
 
           {directNumber && projectDirectory && github && connected ? (

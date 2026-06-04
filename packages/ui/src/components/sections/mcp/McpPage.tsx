@@ -382,6 +382,7 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
                 onClick={() => toggleReveal(idx)}
                 className="absolute right-2 text-muted-foreground/60 hover:text-muted-foreground"
                 title={revealedKeys.has(idx) ? hideValueTitle : showValueTitle}
+                aria-label={revealedKeys.has(idx) ? hideValueTitle : showValueTitle}
               >
                 {revealedKeys.has(idx)
                   ? <Icon name="eye-off" className="h-3.5 w-3.5" />

@@ -53,16 +53,19 @@ export const StatusBar: React.FC = () => {
     if (!currentSessionId) return;
     let cancelled = false;
     let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const poll = () => {
       if (cancelled || attempts >= 8) return;
       attempts++;
       setRetryKey((k) => k + 1);
-      setTimeout(poll, 600);
+      timer = setTimeout(poll, 600);
     };
-    const timer = setTimeout(poll, 600);
+    timer = setTimeout(poll, 600);
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
     };
   }, [currentSessionId, getContextUsage]);
 

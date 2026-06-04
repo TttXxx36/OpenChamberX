@@ -402,7 +402,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
             [streamingMessageId],
         ),
     );
-    const sessionMessageCount = useSessionMessageCount(currentSessionId ?? '');
+    const sessionMessageCount = useSessionMessageCount(currentSessionId);
     const hasRenderableSessionSnapshot = useDirectorySync(
         React.useCallback(
             (state) => (currentSessionId ? getSessionMaterializationStatus(state, currentSessionId).renderable : false),
@@ -564,10 +564,11 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
 
     const parentSession = React.useMemo(() => {
         if (!currentSessionId) return null;
-        const current = sessions.find((session) => session.id === currentSessionId);
+        const sessionsById = new Map(sessions.map((session) => [session.id, session]));
+        const current = sessionsById.get(currentSessionId);
         const parentID = current?.parentID;
         if (!parentID) return null;
-        return sessions.find((session) => session.id === parentID)
+        return sessionsById.get(parentID)
             ?? getAllSyncSessions().find((session) => session.id === parentID)
             ?? null;
     }, [currentSessionId, sessions]);

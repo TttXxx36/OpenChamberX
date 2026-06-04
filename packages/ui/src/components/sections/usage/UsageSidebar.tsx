@@ -30,6 +30,7 @@ const getUsagePercent = (usage: { windows?: Record<string, { usedPercent: number
 export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
+  const resultsByProvider = React.useMemo(() => new Map(results.map((entry) => [entry.providerId, entry])), [results]);
   const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
@@ -158,7 +159,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
         {QUOTA_PROVIDERS.map((provider) => {
-          const result = results.find((entry) => entry.providerId === provider.id);
+          const result = resultsByProvider.get(provider.id);
           const percent = getUsagePercent(result?.usage);
           const tone = resolveUsageTone(percent);
           const isSelected = provider.id === selectedProviderId;
