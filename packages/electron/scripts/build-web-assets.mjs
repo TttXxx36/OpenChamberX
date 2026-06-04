@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,8 @@ const webDistDir = path.join(webDir, 'dist');
 
 const quoteWindowsCommandArg = (value) => `"${String(value).replace(/"/g, '""')}"`;
 
+const hasPathSeparator = (value) => value.includes('/') || value.includes('\\');
+
 const run = (cmd, args, cwd) => {
   const isWindowsCommandScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
   const result = isWindowsCommandScript
@@ -31,18 +34,88 @@ const run = (cmd, args, cwd) => {
   }
 };
 
+const resolveWindowsExecutableCandidate = (value) => {
+  const candidate = typeof value === 'string' ? value.trim() : '';
+  if (!candidate) return null;
+
+  const extension = path.extname(candidate).toLowerCase();
+  if (extension === '.exe' || extension === '.cmd' || extension === '.bat') {
+    return candidate;
+  }
+  if (!hasPathSeparator(candidate)) {
+    return null;
+  }
+
+  for (const suffix of ['.exe', '.cmd', '.bat']) {
+    const withSuffix = `${candidate}${suffix}`;
+    if (existsSync(withSuffix)) {
+      return withSuffix;
+    }
+  }
+  return null;
+};
+
+const resolveWindowsBun = () => {
+  for (const candidate of [process.env.BUN, process.env.npm_execpath, process.env.BUN_INSTALL ? path.join(process.env.BUN_INSTALL, 'bin', 'bun') : null]) {
+    const resolved = resolveWindowsExecutableCandidate(candidate);
+    if (resolved) return resolved;
+  }
+
+  for (const command of ['bun.exe', 'bun.cmd']) {
+    const result = spawnSync('where.exe', [command], { encoding: 'utf8' });
+    const resolved = (result.stdout || '').split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+    if (resolved) return resolved;
+  }
+
+  return 'bun.exe';
+};
+
 const resolveBun = () => {
+  if (process.platform === 'win32') {
+    return resolveWindowsBun();
+  }
   if (typeof process.env.BUN === 'string' && process.env.BUN.trim()) {
     return process.env.BUN.trim();
-  }
-  // On Windows there is no /bin/bash; trust that bun is on PATH
-  // (setup-bun puts it there in CI, and dev installs land in PATH too).
-  if (process.platform === 'win32') {
-    return 'bun';
   }
   const result = spawnSync('/bin/bash', ['-lc', 'command -v bun'], { encoding: 'utf8' });
   const resolved = (result.stdout || '').trim();
   return resolved || 'bun';
+};
+
+const formatBytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+
+const collectDirectoryStats = async (target) => {
+  const stats = { files: 0, bytes: 0, largest: [] };
+  const visit = async (dir) => {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await visit(entryPath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      const info = await fs.stat(entryPath);
+      stats.files += 1;
+      stats.bytes += info.size;
+      stats.largest.push({ file: path.relative(target, entryPath), bytes: info.size });
+    }
+  };
+
+  await visit(target);
+  stats.largest.sort((left, right) => right.bytes - left.bytes);
+  stats.largest = stats.largest.slice(0, 10);
+  return stats;
+};
+
+const logDirectoryStats = async (label, target) => {
+  const stats = await collectDirectoryStats(target);
+  console.log(`[electron] ${label}: ${stats.files} files, ${formatBytes(stats.bytes)}`);
+  for (const item of stats.largest) {
+    console.log(`[electron] ${label} largest: ${formatBytes(item.bytes)} ${item.file}`);
+  }
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -85,5 +158,6 @@ const stagedWebDistDir = await fs.mkdtemp(path.join(resourcesDir, 'web-dist-stag
 await copyDir(webDistDir, stagedWebDistDir);
 await removeDir(resourcesWebDistDir);
 await fs.rename(stagedWebDistDir, resourcesWebDistDir);
+await logDirectoryStats('web-dist', resourcesWebDistDir);
 
 console.log(`[electron] web assets ready: ${resourcesWebDistDir}`);

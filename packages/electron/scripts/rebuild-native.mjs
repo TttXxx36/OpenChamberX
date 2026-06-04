@@ -143,7 +143,7 @@ try {
     electronVersion,
     force: true,
     arch: process.env.ELECTRON_BUILDER_ARCH || process.arch,
-    onlyModules: ['better-sqlite3', 'node-pty', 'bun-pty'],
+    onlyModules: ['better-sqlite3', 'node-pty'],
   });
 } finally {
   try {
