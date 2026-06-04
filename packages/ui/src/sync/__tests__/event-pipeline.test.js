@@ -5,21 +5,29 @@ const originalDocument = globalThis.document;
 const originalWindow = globalThis.window;
 const originalWebSocket = globalThis.WebSocket;
 
+function setGlobal(name, value) {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    writable: true,
+    value,
+  });
+}
+
 function installDomStubs() {
-  globalThis.document = {
+  setGlobal('document', {
     visibilityState: 'visible',
     addEventListener() {},
     removeEventListener() {},
-  };
+  });
 
-  globalThis.window = {
+  setGlobal('window', {
     location: {
       href: 'http://127.0.0.1:3000/',
       origin: 'http://127.0.0.1:3000',
     },
     addEventListener() {},
     removeEventListener() {},
-  };
+  });
 }
 
 class FakeWebSocket {
@@ -55,9 +63,9 @@ class FakeWebSocket {
 }
 
 afterEach(() => {
-  globalThis.document = originalDocument;
-  globalThis.window = originalWindow;
-  globalThis.WebSocket = originalWebSocket;
+  setGlobal('document', originalDocument);
+  setGlobal('window', originalWindow);
+  setGlobal('WebSocket', originalWebSocket);
   FakeWebSocket.instances = [];
 });
 
@@ -283,7 +291,7 @@ describe('createEventPipeline', () => {
     expect(received[0].payload.type).toBe('server.connected');
   });
 
-  it('keeps message.part.delta events when a newer message.part.updated is queued for the same field', async () => {
+  it('keeps message.part.delta order when a newer message.part.updated is queued for the same field', async () => {
     installDomStubs();
 
     let releaseStream;
@@ -320,7 +328,7 @@ describe('createEventPipeline', () => {
           },
         },
       },
-      // T2: message.part.updated for part-A — coalesces with T0
+      // T2: message.part.updated for part-A — must stay after T1
       {
         payload: {
           type: 'message.part.updated',
@@ -337,7 +345,7 @@ describe('createEventPipeline', () => {
         sdk,
         onEvent: (dir, payload) => {
           received.push({ directory: dir, payload });
-          if (received.length === 2) {
+          if (received.length === 3) {
             cleanup();
             releaseStream();
             resolve();
@@ -348,10 +356,11 @@ describe('createEventPipeline', () => {
 
     await delivered;
 
-    expect(received.length).toBe(2);
+    expect(received.length).toBe(3);
     expect(received[0].payload.type).toBe('message.part.updated');
     expect(received[1].payload.type).toBe('message.part.delta');
     expect(received[1].payload.properties.delta).toBe(' world');
+    expect(received[2].payload.type).toBe('message.part.updated');
   });
 
   it('keeps delta events for other fields on the same part', async () => {
@@ -525,7 +534,7 @@ describe('createEventPipeline', () => {
 
   it('consumes websocket message stream frames when transport is ws', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    setGlobal('WebSocket', FakeWebSocket);
 
     const received = [];
     const sdk = {
@@ -584,7 +593,7 @@ describe('createEventPipeline', () => {
 
   it('falls back to SSE when websocket closes before ready in auto mode', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    setGlobal('WebSocket', FakeWebSocket);
 
     let releaseStream;
     const hold = new Promise((resolve) => {
@@ -631,7 +640,7 @@ describe('createEventPipeline', () => {
 
   it('falls back to SSE when websocket does not become ready in auto mode', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    setGlobal('WebSocket', FakeWebSocket);
 
     let releaseStream;
     const hold = new Promise((resolve) => {
@@ -684,7 +693,7 @@ describe('createEventPipeline', () => {
 
   it('passes the last websocket event id when falling back to SSE', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    setGlobal('WebSocket', FakeWebSocket);
     const originalConsoleError = console.error;
     console.error = () => {};
 
@@ -763,7 +772,7 @@ describe('createEventPipeline', () => {
 
   it('marks the pipeline disconnected on heartbeat timeout and recovers on the next websocket connect', async () => {
     installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+    setGlobal('WebSocket', FakeWebSocket);
 
     const disconnectReasons = [];
     let reconnectCount = 0;

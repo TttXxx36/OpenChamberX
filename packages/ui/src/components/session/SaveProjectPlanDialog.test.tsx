@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, expect, mock, test } from 'bun:test';
+import { afterAll, describe, expect, mock, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { I18nProvider } from '@/lib/i18n';
@@ -14,6 +14,10 @@ mock.module('@/components/ui/dialog', () => ({
   DialogHeader: ({ children }: MockDialogProps) => <div>{children}</div>,
   DialogTitle: ({ children }: MockDialogProps) => <h2>{children}</h2>,
 }));
+
+afterAll(() => {
+  mock.restore();
+});
 
 const { SaveProjectPlanDialog } = await import('./SaveProjectPlanDialog');
 

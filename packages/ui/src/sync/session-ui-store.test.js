@@ -230,7 +230,7 @@ describe('routeMessage directory scoping', () => {
       opencodeClient.shellSession = originalShellSession;
     }
 
-    expect(calls[0]).toEqual({ method: 'withDirectory', directory: '/session/project' });
-    expect(calls[1].params.directory).toBe('/session/project');
+    expect(calls[0].method).toBe('session.shell');
+    expect(calls[0].params.directory).toBe('/session/project');
   });
 });

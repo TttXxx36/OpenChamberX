@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const activeProjectPath = '/workspace/project';
 
@@ -6,9 +6,6 @@ let listCommandsWithDetailsCalls = 0;
 let listCommandsWithDetailsImpl: () => Promise<unknown[]> = async () => [];
 let withDirectoryImpl: (_directory: string | null, callback: () => Promise<unknown>) => Promise<unknown> = async (_directory, callback) => callback();
 let getDirectoryImpl: () => string = () => '/fallback/project';
-let runtimeFetchImpl: () => Promise<Response> = async () => new Response(JSON.stringify({ scope: 'project' }), {
-  headers: { 'Content-Type': 'application/json' },
-});
 
 const listCommandsWithDetailsMock = async () => {
   listCommandsWithDetailsCalls += 1;
@@ -17,8 +14,6 @@ const listCommandsWithDetailsMock = async () => {
 
 const withDirectoryMock = async (directory: string | null, callback: () => Promise<unknown>) => withDirectoryImpl(directory, callback);
 const getDirectoryMock = () => getDirectoryImpl();
-const runtimeFetchMock = async () => runtimeFetchImpl();
-
 mock.module('@/lib/opencode/client', () => ({
   opencodeClient: {
     getDirectory: getDirectoryMock,
@@ -35,10 +30,6 @@ mock.module('@/stores/useProjectsStore', () => ({
   },
 }));
 
-mock.module('@/lib/runtime-fetch', () => ({
-  runtimeFetch: runtimeFetchMock,
-}));
-
 mock.module('@/lib/configUpdate', () => ({
   startConfigUpdate: mock(() => undefined),
   finishConfigUpdate: mock(() => undefined),
@@ -52,17 +43,18 @@ mock.module('@/lib/configSync', () => ({
 }));
 
 const { useCommandsStore } = await import('./useCommandsStore');
+mock.restore();
 
 describe('useCommandsStore', () => {
+  afterAll(() => {
+    mock.restore();
+  });
+
   beforeEach(() => {
     listCommandsWithDetailsCalls = 0;
     listCommandsWithDetailsImpl = async () => [];
     withDirectoryImpl = async (_directory, callback) => callback();
     getDirectoryImpl = () => '/fallback/project';
-    runtimeFetchImpl = async () => new Response(JSON.stringify({ scope: 'project' }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-
     useCommandsStore.setState({
       selectedCommandName: null,
       commands: [],

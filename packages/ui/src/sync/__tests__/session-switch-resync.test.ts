@@ -1,6 +1,10 @@
-import { describe, expect, test, beforeEach, mock } from "bun:test"
+import { afterAll, describe, expect, test, beforeEach, mock } from "bun:test"
 import { create, type StoreApi } from "zustand"
 import type { PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
+
+afterAll(() => {
+  mock.restore()
+})
 
 const listPendingQuestionsCalls: Array<{ directories?: Array<string | null | undefined> }> = []
 const listPendingPermissionsCalls: Array<{ directories?: Array<string | null | undefined> }> = []

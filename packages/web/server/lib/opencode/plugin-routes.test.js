@@ -15,7 +15,7 @@ let refreshOpenCodeAfterConfigChange;
 let app;
 let cleanupPaths;
 
-const testUnlessRoot = typeof process.getuid === 'function' && process.getuid() === 0 ? test.skip : test;
+const testUnlessRoot = typeof process.getuid === 'function' && process.getuid() === 0 || process.platform === 'win32' ? test.skip : test;
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));

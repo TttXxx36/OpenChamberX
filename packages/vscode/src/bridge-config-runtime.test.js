@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, describe, expect, mock, test } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,10 @@ mock.module('vscode', () => ({
     getConfiguration: () => ({ get: () => undefined }),
   },
 }));
+
+afterAll(() => {
+  mock.restore();
+});
 
 const { handleConfigBridgeMessage } = await import('./bridge-config-runtime.ts');
 

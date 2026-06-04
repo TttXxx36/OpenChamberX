@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
+
+afterAll(() => {
+  mock.restore();
+});
 
 const gitService = {
   stageGitFiles: mock(),
@@ -7,11 +11,14 @@ const gitService = {
   cherryPick: mock(),
   revertCommit: mock(),
   resetToCommit: mock(),
+  getGitRangeFiles: mock(),
+  getGitRangeDiff: mock(),
 };
 
 mock.module('./gitService', () => gitService);
 
 const { handleStandardGitBridgeMessage } = await import('./bridge-git-runtime');
+mock.restore();
 
 describe('bridge git runtime index mutations', () => {
   beforeEach(() => {
@@ -21,6 +28,10 @@ describe('bridge git runtime index mutations', () => {
     gitService.cherryPick.mockReset();
     gitService.revertCommit.mockReset();
     gitService.resetToCommit.mockReset();
+    gitService.getGitRangeFiles.mockReset();
+    gitService.getGitRangeDiff.mockReset();
+    gitService.getGitRangeFiles.mockImplementation(async () => ['src/a.ts']);
+    gitService.getGitRangeDiff.mockImplementation(async () => ({ diff: 'diff --git a/src/a.ts b/src/a.ts\n+new line' }));
   });
 
   it('accepts legacy stage path payloads', async () => {

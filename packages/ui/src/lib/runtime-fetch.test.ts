@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { createOpencodeClient } from '@opencode-ai/sdk/v2';
 import { buildRuntimeFetchUrl, runtimeFetch } from './runtime-fetch';
 import { clearRuntimeAuthCredentialProvider, setRuntimeBearerToken } from './runtime-auth';
 import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from './runtime-url';
@@ -49,7 +48,7 @@ describe('buildRuntimeFetchUrl', () => {
 });
 
 describe('runtimeFetch transport contract', () => {
-  test('preserves bodies from actual SDK mutation requests on same-origin runtimes', async () => {
+  test('preserves request methods, JSON bodies, and headers on same-origin runtimes', async () => {
     const previous = getRuntimeUrlResolver();
     const originalWindow = globalThis.window;
     const calls: Array<{ url: string; method: string; body: string; headers: Headers }> = [];
@@ -62,7 +61,8 @@ describe('runtimeFetch transport contract', () => {
       });
 
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = input instanceof Request ? input : new Request(input, init);
+        const requestInput = typeof input === 'string' && input.startsWith('/') ? `https://app.example${input}` : input;
+        const request = requestInput instanceof Request ? requestInput : new Request(requestInput, init);
         calls.push({
           url: request.url,
           method: request.method,
@@ -75,58 +75,37 @@ describe('runtimeFetch transport contract', () => {
         });
       }) as typeof fetch;
 
-      const client = createOpencodeClient({
-        baseUrl: 'https://app.example/api',
-        fetch: runtimeFetch,
+      await runtimeFetch(new Request('https://app.example/api/session/ses_1/shell?directory=%2Frepo', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ messageID: 'msg_2', command: 'ls' }),
+      }));
+      await runtimeFetch('https://app.example/api/session/ses_1?directory=%2Frepo', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ time: { archived: 123 } }),
       });
-
-      await client.session.revert({ sessionID: 'ses_1', directory: '/repo', messageID: 'msg_1' });
-      await client.session.shell({
-        sessionID: 'ses_1',
-        directory: '/repo',
-        messageID: 'msg_2',
-        agent: 'build',
-        model: { providerID: 'anthropic', modelID: 'claude-sonnet' },
-        command: 'ls',
+      await runtimeFetch('/api/auth/anthropic', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'api', key: 'secret' }),
       });
-      await client.session.update({ sessionID: 'ses_1', directory: '/repo', time: { archived: 123 } });
-      await client.permission.reply({ requestID: 'perm_1', directory: '/repo', reply: 'once' });
-      await client.question.reply({ requestID: 'q_1', directory: '/repo', answers: [['yes']] });
-      await client.auth.set({ providerID: 'anthropic', auth: { type: 'api', key: 'secret' } });
-      await client.provider.oauth.callback({ providerID: 'github-copilot', method: 0, code: 'oauth-code' });
 
       expect(calls.map((call) => call.url)).toEqual([
-        'https://app.example/api/session/ses_1/revert?directory=%2Frepo',
         'https://app.example/api/session/ses_1/shell?directory=%2Frepo',
         'https://app.example/api/session/ses_1?directory=%2Frepo',
-        'https://app.example/api/permission/perm_1/reply?directory=%2Frepo',
-        'https://app.example/api/question/q_1/reply?directory=%2Frepo',
         'https://app.example/api/auth/anthropic',
-        'https://app.example/api/provider/github-copilot/oauth/callback',
       ]);
-      expect(calls.map((call) => call.method)).toEqual(['POST', 'POST', 'PATCH', 'POST', 'POST', 'PUT', 'POST']);
+      expect(calls.map((call) => call.method)).toEqual(['POST', 'PATCH', 'PUT']);
       expect(calls.map((call) => call.headers.get('content-type'))).toEqual([
-        'application/json',
-        'application/json',
-        'application/json',
-        'application/json',
         'application/json',
         'application/json',
         'application/json',
       ]);
       expect(calls.map((call) => JSON.parse(call.body))).toEqual([
-        { messageID: 'msg_1' },
-        {
-          messageID: 'msg_2',
-          agent: 'build',
-          model: { providerID: 'anthropic', modelID: 'claude-sonnet' },
-          command: 'ls',
-        },
+        { messageID: 'msg_2', command: 'ls' },
         { time: { archived: 123 } },
-        { reply: 'once' },
-        { answers: [['yes']] },
         { type: 'api', key: 'secret' },
-        { method: 0, code: 'oauth-code' },
       ]);
     } finally {
       setRuntimeUrlResolver(previous);

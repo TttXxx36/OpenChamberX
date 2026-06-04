@@ -121,4 +121,17 @@ describe('settings runtime', () => {
       await fsPromises.rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('does not overwrite settings when the current file cannot be parsed', async () => {
+    const { runtime, settingsFilePath, cleanup } = await createRuntime();
+    try {
+      const invalidSettings = '{"projects":[{"id":"project-1"}],';
+      await fsPromises.writeFile(settingsFilePath, invalidSettings, 'utf8');
+
+      await expect(runtime.persistSettings({ theme: 'dark' })).rejects.toThrow();
+      await expect(fsPromises.readFile(settingsFilePath, 'utf8')).resolves.toBe(invalidSettings);
+    } finally {
+      await cleanup();
+    }
+  });
 });

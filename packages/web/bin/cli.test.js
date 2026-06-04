@@ -6,11 +6,11 @@ import { isModuleCliExecution, normalizeCliEntryPath } from './cli-entry.js';
 
 // cli entry detection tests
 describe('cli entry detection', () => {
-  const modulePath = '/tmp/openchamber/bin/cli.js';
+  const modulePath = path.resolve('tmp/openchamber/bin/cli.js');
   const moduleUrl = pathToFileURL(modulePath).href;
 
   it('resolves symlinked entry paths before comparing', () => {
-    const symlinkPath = '/usr/local/bin/openchamber';
+    const symlinkPath = path.resolve('usr/local/bin/openchamber');
     const realpath = (filePath) => {
       if (filePath === path.resolve(symlinkPath)) {
         return modulePath;
@@ -42,7 +42,7 @@ describe('cli entry detection', () => {
   });
 
   it('accepts wrapper binary name fallback when requested', () => {
-    const wrapperPath = '/home/user/.local/bin/openchamber';
+    const wrapperPath = path.resolve('home/user/.local/bin/openchamber');
     expect(isModuleCliExecution(wrapperPath, moduleUrl, undefined, 'openchamber')).toBe(true);
   });
 

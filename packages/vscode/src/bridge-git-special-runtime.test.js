@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+
+const originalFetch = globalThis.fetch;
 
 const gitService = {
   getGitRangeFiles: mock(),
@@ -28,6 +30,7 @@ mock.module('./gitService', () => gitService);
 mock.module('@opencode-ai/sdk/v2', () => ({ createOpencodeClient }));
 
 const { handleSpecialGitBridgeMessage } = await import('./bridge-git-special-runtime');
+mock.restore();
 
 describe('bridge git special runtime', () => {
   beforeEach(() => {
@@ -62,6 +65,18 @@ describe('bridge git special runtime', () => {
       error: undefined,
     }));
     sdkClient.session.delete.mockImplementation(async () => ({ data: true, error: undefined }));
+  });
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      writable: true,
+      value: originalFetch,
+    });
+  });
+
+  afterAll(() => {
+    mock.restore();
   });
 
   it('generates PR descriptions through the OpenCode SDK session flow', async () => {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 import type { PluginEntry, PluginFile, RegistryResult } from './usePluginsStore';
 
@@ -32,6 +32,7 @@ mock.module('@/lib/configUpdate', () => ({
 }));
 
 const { usePluginsStore } = await import('./usePluginsStore');
+mock.restore();
 
 const entry: PluginEntry = {
   id: 'config:user:plugin-a',
@@ -119,6 +120,10 @@ const flushPluginFollowUps = async (): Promise<void> => {
 };
 
 describe('usePluginsStore', () => {
+  afterAll(() => {
+    mock.restore();
+  });
+
   beforeEach(() => {
     resetStore();
     fetchCalls.length = 0;

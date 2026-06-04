@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+
+afterAll(() => {
+  mock.restore();
+});
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -31,6 +35,7 @@ mock.module('@/lib/opencode/client', () => ({
 }));
 
 const { useFileSearchStore } = await import('./useFileSearchStore');
+mock.restore();
 
 describe('useFileSearchStore', () => {
   beforeEach(() => {

@@ -21,12 +21,13 @@ const createRuntime = () => createPushRuntime({
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('push runtime visibility tracking', () => {
   it('keeps visible UI state when another client reports hidden', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    let now = new Date('2026-01-01T00:00:00.000Z').getTime();
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
 
     const runtime = createRuntime();
 
@@ -37,7 +38,7 @@ describe('push runtime visibility tracking', () => {
     expect(runtime.isUiVisible('visible-client')).toBe(true);
     expect(runtime.isUiVisible('hidden-client')).toBe(false);
 
-    vi.advanceTimersByTime(30_001);
+    now += 30_001;
 
     expect(runtime.isAnyUiVisible()).toBe(false);
     expect(runtime.isUiVisible('visible-client')).toBe(false);

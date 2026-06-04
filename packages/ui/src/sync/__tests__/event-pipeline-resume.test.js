@@ -4,27 +4,35 @@ import { createEventPipeline } from '../event-pipeline';
 const savedDocument = globalThis.document;
 const savedWindow = globalThis.window;
 
+function setGlobal(name, value) {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    writable: true,
+    value,
+  });
+}
+
 afterEach(() => {
-  globalThis.document = savedDocument;
-  globalThis.window = savedWindow;
+  setGlobal('document', savedDocument);
+  setGlobal('window', savedWindow);
 });
 
 describe('createEventPipeline — system resume reconnect', () => {
   it('reconnects immediately on openchamber:system-resume event', async () => {
     const winListeners = {};
-    globalThis.document = {
+    setGlobal('document', {
       visibilityState: 'visible',
       addEventListener() {},
       removeEventListener() {},
-    };
-    globalThis.window = {
+    });
+    setGlobal('window', {
       location: {
         href: 'http://127.0.0.1:3000/',
         origin: 'http://127.0.0.1:3000',
       },
       addEventListener(event, handler) { winListeners[event] = handler; },
       removeEventListener(event) { delete winListeners[event]; },
-    };
+    });
 
     const disconnectReasons = [];
     let reconnectCount = 0;

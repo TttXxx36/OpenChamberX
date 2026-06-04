@@ -434,7 +434,7 @@ export const createSettingsRuntime = (deps) => {
         return {};
       }
       console.warn('Failed to read settings file:', error);
-      return {};
+      throw error;
     }
   };
 

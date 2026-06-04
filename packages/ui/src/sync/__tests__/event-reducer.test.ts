@@ -113,6 +113,19 @@ describe("applyDirectoryEvent", () => {
     expect((draft.part.msg_1[0] as Extract<Part, { type: "text" }>).text).toBe("hello")
   })
 
+  test("skips duplicate part update snapshots", () => {
+    const initialParts = [{ id: "prt_1", messageID: "msg_1", sessionID: "ses_1", type: "text", text: "hello" } as Part]
+    const draft = state({
+      message: { ses_1: [{ id: "msg_1", sessionID: "ses_1", role: "assistant", time: { created: 1 } } as never] },
+      part: { msg_1: initialParts },
+    })
+
+    const result = applyDirectoryEvent(draft, partUpdatedEvent())
+
+    expect(result).toBe(false)
+    expect(draft.part.msg_1).toBe(initialParts)
+  })
+
   test("skips duplicate session status events", () => {
     const draft = state()
     const busyStatus = { type: "busy" } as SessionStatus

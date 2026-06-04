@@ -6,6 +6,8 @@ const failAfter = (ms: number) => new Promise<never>((_, reject) => {
   setTimeout(() => reject(new Error("Timed out waiting for event pipeline flush")), ms)
 })
 
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
 function partUpdatedEvent(text: string): Event {
   return {
     type: "message.part.updated",
@@ -95,6 +97,41 @@ describe("createEventPipeline", () => {
       }
       return `updated:${((event.properties as { part: { text: string } }).part).text}`
     })).toEqual(["updated:a", "delta:b", "updated:ab"])
+  })
+
+  test("does not coalesce a later delta before an intervening part snapshot", async () => {
+    let resolveStreamFinished!: () => void
+    const streamFinished = new Promise<void>((resolve) => {
+      resolveStreamFinished = resolve
+    })
+    const delivered: Event[] = []
+    const pipeline = createEventPipeline({
+      sdk: createSdk([
+        partUpdatedEvent("a"),
+        deltaEvent("b"),
+        partUpdatedEvent("ab"),
+        deltaEvent("c"),
+      ], resolveStreamFinished),
+      onEvent: (_directory, payload) => {
+        delivered.push(payload)
+      },
+      transport: "sse",
+      heartbeatTimeoutMs: 1_000,
+    })
+
+    try {
+      await streamFinished
+      await wait(100)
+    } finally {
+      pipeline.cleanup()
+    }
+
+    expect(delivered.map((event) => {
+      if (event.type === "message.part.delta") {
+        return `delta:${(event.properties as { delta: string }).delta}`
+      }
+      return `updated:${((event.properties as { part: { text: string } }).part).text}`
+    })).toEqual(["updated:a", "delta:b", "updated:ab", "delta:c"])
   })
 
   test("normalizes openchamber session status events", async () => {

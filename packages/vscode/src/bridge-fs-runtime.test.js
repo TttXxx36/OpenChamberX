@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { promisify } from 'node:util';
+
+afterAll(() => {
+  mock.restore();
+});
 
 const execCalls = [];
 const execMock = mock(() => {

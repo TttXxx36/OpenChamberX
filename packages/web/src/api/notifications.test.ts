@@ -41,7 +41,7 @@ const installWindowMock = () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.resetModules();
+  vi.resetModules?.();
   Object.defineProperty(globalThis, 'Notification', { configurable: true, value: originalNotification });
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: originalNavigator });
   Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
@@ -57,8 +57,8 @@ describe('web notifications API', () => {
     const { createWebNotificationsAPI } = await import('./notifications');
     const api = createWebNotificationsAPI();
 
-    await expect(api.notifyAgentCompletion({ title: 'Ready', body: 'Done', tag: 'ready-session' })).resolves.toBe(true);
-    await expect(api.notifyAgentCompletion({ title: 'Ready', body: 'Done', tag: 'ready-session' })).resolves.toBe(true);
+    await expect(api.notifyAgentCompletion({ title: 'Ready', body: 'Done', tag: 'foreground-ready-session' })).resolves.toBe(true);
+    await expect(api.notifyAgentCompletion({ title: 'Ready', body: 'Done', tag: 'foreground-ready-session' })).resolves.toBe(true);
 
     expect(created).toHaveLength(1);
     expect(created[0]?.title).toBe('Ready');
@@ -107,10 +107,10 @@ describe('web notifications API', () => {
     visibilityState = 'visible';
     focused = true;
 
-    await expect(api.notifyAgentCompletion({ title: 'Ready', body: 'Done', tag: 'ready-session' })).resolves.toBe(true);
+    await expect(api.notifyAgentCompletion({ title: 'Ready', body: 'Done', tag: 'hidden-ready-session' })).resolves.toBe(true);
 
     expect(showNotification).toHaveBeenCalledTimes(1);
-    expect(showNotification).toHaveBeenCalledWith('Ready', expect.objectContaining({ body: 'Done', tag: 'ready-session' }));
+    expect(showNotification).toHaveBeenCalledWith('Ready', expect.objectContaining({ body: 'Done', tag: 'hidden-ready-session' }));
     expect(created).toHaveLength(0);
   });
 });

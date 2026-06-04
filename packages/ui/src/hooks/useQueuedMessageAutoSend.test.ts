@@ -1,6 +1,11 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { Agent } from '@opencode-ai/sdk/v2';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { QueuedMessage } from '../stores/messageQueueStore';
+
+afterAll(() => {
+  mock.restore();
+});
 
 let visibleAgents: Agent[] = [];
 const sendMessageCalls: unknown[][] = [];
@@ -15,23 +20,12 @@ mock.module('@/stores/useConfigStore', () => ({
   },
 }));
 
-mock.module('@/sync/session-ui-store', () => ({
-  useSessionUIStore: {
-    getState: () => ({
-      sendMessage: (...args: unknown[]) => {
-        sendMessageCalls.push(args);
-        return Promise.resolve();
-      },
-      sessionAbortFlags: new Map(),
-    }),
-  },
-}));
-
 import {
   buildQueuedAutoSendPayload,
   sendQueuedAutoSendPayload,
   shouldDispatchQueuedAutoSend,
 } from './useQueuedMessageAutoSend';
+mock.restore();
 
 describe('shouldDispatchQueuedAutoSend', () => {
   test('dispatches only after an active session becomes idle', () => {
@@ -49,6 +43,13 @@ describe('buildQueuedAutoSendPayload', () => {
   beforeEach(() => {
     visibleAgents = [];
     sendMessageCalls.length = 0;
+    useSessionUIStore.setState({
+      sessionAbortFlags: new Map(),
+      sendMessage: (...args: unknown[]) => {
+        sendMessageCalls.push(args);
+        return Promise.resolve();
+      },
+    } as Partial<ReturnType<typeof useSessionUIStore.getState>>);
   });
 
   test('returns only the first queued message for auto-send', () => {

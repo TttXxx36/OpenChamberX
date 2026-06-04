@@ -264,7 +264,43 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       const props = payload.properties as { messageID: string; partID: string; field: string }
       return `message.part.delta:${props.messageID}:${props.partID}:${props.field}`
     }
+    if (payload.type === "message.part.updated") {
+      const part = (payload.properties as { part?: { messageID?: string; id?: string } }).part
+      if (part?.messageID && part.id) {
+        return `message.part.updated:${part.messageID}:${part.id}`
+      }
+    }
     return undefined
+  }
+
+  const invalidatePartCoalescing = (payload: Event, coalesced: Map<string, number>) => {
+    let messageID: string | undefined
+    let partID: string | undefined
+    let prefix: string | undefined
+
+    if (payload.type === "message.part.updated") {
+      const part = (payload.properties as { part?: { messageID?: string; id?: string } }).part
+      messageID = part?.messageID
+      partID = part?.id
+      prefix = messageID && partID ? `message.part.delta:${messageID}:${partID}:` : undefined
+    } else if (payload.type === "message.part.delta") {
+      const props = payload.properties as { messageID?: string; partID?: string }
+      messageID = props.messageID
+      partID = props.partID
+      prefix = messageID && partID ? `message.part.updated:${messageID}:${partID}` : undefined
+    } else if (payload.type === "message.part.removed") {
+      const props = payload.properties as { messageID?: string; partID?: string }
+      messageID = props.messageID
+      partID = props.partID
+      prefix = messageID && partID ? `message.part.` : undefined
+    }
+
+    if (!messageID || !partID || !prefix) return
+    for (const existingKey of coalesced.keys()) {
+      if (existingKey.startsWith(prefix) && existingKey.includes(`:${messageID}:${partID}`)) {
+        coalesced.delete(existingKey)
+      }
+    }
   }
 
   const flushDir = (directory: string) => {
@@ -429,6 +465,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     const normalizedPayload = normalizeEventType(payload)
     const routedDirectory = routeDirectory?.(directory, normalizedPayload) || directory
     const d = getOrCreateDir(routedDirectory)
+    invalidatePartCoalescing(normalizedPayload, d.coalesced)
     const k = key(normalizedPayload)
     if (k) {
       const i = d.coalesced.get(k)

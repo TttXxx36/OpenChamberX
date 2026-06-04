@@ -5,10 +5,18 @@ const savedDocument = globalThis.document;
 const savedWindow = globalThis.window;
 const savedNavigator = globalThis.navigator;
 
+function setGlobal(name, value) {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    writable: true,
+    value,
+  });
+}
+
 afterEach(() => {
-  globalThis.document = savedDocument;
-  globalThis.window = savedWindow;
-  globalThis.navigator = savedNavigator;
+  setGlobal('document', savedDocument);
+  setGlobal('window', savedWindow);
+  setGlobal('navigator', savedNavigator);
 });
 
 // Multi-listener event-target stub. The simpler single-slot stub used in
@@ -38,11 +46,11 @@ function createEventTarget(extras = {}) {
 
 describe('createEventPipeline — online event', () => {
   it('cuts the inter-attempt wait short when `online` fires after disconnect', async () => {
-    globalThis.document = createEventTarget({ visibilityState: 'visible' });
-    globalThis.window = createEventTarget({
+    setGlobal('document', createEventTarget({ visibilityState: 'visible' }));
+    setGlobal('window', createEventTarget({
       location: { href: 'http://127.0.0.1:3000/', origin: 'http://127.0.0.1:3000' },
-    });
-    globalThis.navigator = { onLine: false };
+    }));
+    setGlobal('navigator', { onLine: false });
 
     let sdkCallIndex = 0;
     const sdk = {
@@ -85,7 +93,7 @@ describe('createEventPipeline — online event', () => {
           // Flip the browser back online and fire the event; waitForRetry
           // should resolve early and the next attempt should fire.
           setTimeout(() => {
-            globalThis.navigator = { onLine: true };
+            setGlobal('navigator', { onLine: true });
             globalThis.window.dispatch('online');
           }, 30);
         },

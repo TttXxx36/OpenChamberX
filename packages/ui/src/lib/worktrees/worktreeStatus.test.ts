@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 type ExecResult = { command: string; success: boolean; stdout?: string };
 
@@ -27,6 +27,7 @@ mock.module('@/lib/gitApi', () => ({
 }));
 
 const { getRootBranch, invalidateResolvedProjectRootCache } = await import('./worktreeStatus');
+mock.restore();
 
 // Helper: a single `git rev-parse --absolute-git-dir --git-common-dir` reply.
 const revParse = (absoluteGitDir: string, commonDir: string): ExecResult => ({
@@ -36,6 +37,10 @@ const revParse = (absoluteGitDir: string, commonDir: string): ExecResult => ({
 });
 
 describe('worktreeStatus.getRootBranch', () => {
+  afterAll(() => {
+    mock.restore();
+  });
+
   beforeEach(() => {
     invalidateResolvedProjectRootCache();
     execCalls.length = 0;

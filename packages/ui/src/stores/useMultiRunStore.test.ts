@@ -1,5 +1,11 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { Session } from '@opencode-ai/sdk/v2';
+import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+
+afterAll(() => {
+  registerRuntimeAPIs(null);
+  mock.restore();
+});
 
 const upsertedSessions: Session[] = [];
 const registeredDirectories: Array<{ sessionID: string; directory: string }> = [];
@@ -10,15 +16,6 @@ const childState = {
   limit: 5,
 };
 let currentDirectory = '/repo';
-
-mock.module('@/sync/session-ui-store', () => ({
-  routeMessage: mock(() => Promise.resolve()),
-  useSessionUIStore: {
-    getState: () => ({
-      markSessionAsOpenChamberCreated: mock(() => undefined),
-    }),
-  },
-}));
 
 mock.module('@/lib/opencode/client', () => ({
   opencodeClient: {
@@ -40,17 +37,9 @@ mock.module('@/lib/opencode/client', () => ({
   },
 }));
 
-mock.module('@/lib/gitApi', () => ({
-  checkIsGitRepository: mock(() => Promise.resolve(false)),
-}));
-
 mock.module('@/lib/worktrees/worktreeCreate', () => ({
   createWorktreeWithDefaults: mock(),
   resolveRootTrackingRemote: mock(() => Promise.resolve(null)),
-}));
-
-mock.module('@/lib/worktrees/worktreeStatus', () => ({
-  getRootBranch: mock(() => Promise.resolve('main')),
 }));
 
 mock.module('@/lib/openchamberConfig', () => ({
@@ -81,6 +70,7 @@ mock.module('./useSnippetsStore', () => ({
 }));
 
 mock.module('./useGlobalSessionsStore', () => ({
+  resolveGlobalSessionDirectory: () => null,
   useGlobalSessionsStore: {
     getState: () => ({
       upsertSession: (session: Session) => {
@@ -91,10 +81,24 @@ mock.module('./useGlobalSessionsStore', () => ({
 }));
 
 mock.module('@/sync/sync-refs', () => ({
+  setSyncRefs: () => undefined,
   registerSessionDirectory: (sessionID: string, directory: string) => {
     registeredDirectories.push({ sessionID, directory });
   },
+  getSyncSDK: () => ({}),
+  getSyncDirectory: () => '/repo',
+  getSyncSessions: () => [],
+  getAllSyncSessions: () => [],
+  getSyncMessages: () => [],
+  getSyncParts: () => [],
+  getSyncSessionMaterializationStatus: () => ({ hasMessages: false, renderable: false, missingPartMessageIDs: [] }),
+  getSyncSessionStatus: () => undefined,
+  getSyncPermissions: () => [],
+  getSyncQuestions: () => [],
+  getDirectoryState: () => undefined,
   getSyncChildStores: () => ({
+    children: new Map(),
+    getState: () => undefined,
     ensureChild: (directory: string, options?: { bootstrap?: boolean }) => {
       ensureChildCalls.push({ directory, bootstrap: options?.bootstrap });
       return {
@@ -110,6 +114,7 @@ mock.module('@/sync/sync-refs', () => ({
 }));
 
 const { useMultiRunStore } = await import('./useMultiRunStore');
+mock.restore();
 
 describe('useMultiRunStore', () => {
   beforeEach(() => {
@@ -120,6 +125,11 @@ describe('useMultiRunStore', () => {
     childState.sessionTotal = 0;
     childState.limit = 5;
     currentDirectory = '/repo';
+    registerRuntimeAPIs({
+      git: {
+        checkIsGitRepository: async () => false,
+      },
+    } as unknown as Parameters<typeof registerRuntimeAPIs>[0]);
     useMultiRunStore.setState({ isLoading: false, error: null });
   });
 

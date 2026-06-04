@@ -23,6 +23,26 @@ type DedupeMetadata = {
   __dedupeNextDeltaFields?: string[]
 }
 
+function areSnapshotValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    return left.every((value, index) => areSnapshotValuesEqual(value, right[index]))
+  }
+
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const leftKeys = Object.keys(leftRecord).filter((key) => key !== "__dedupeNextDeltaFields")
+  const rightKeys = Object.keys(rightRecord).filter((key) => key !== "__dedupeNextDeltaFields")
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every((key) => Object.hasOwn(rightRecord, key) && areSnapshotValuesEqual(leftRecord[key], rightRecord[key]))
+}
+
+function arePartSnapshotsEqual(previous: Part, next: Part): boolean {
+  return areSnapshotValuesEqual(previous, next)
+}
+
 function appendNonOverlappingDelta(existingValue: string | undefined, delta: string) {
   if (!existingValue || delta.length === 0) return (existingValue ?? "") + delta
   if (existingValue.endsWith(delta)) return existingValue
@@ -326,6 +346,9 @@ export function applyDirectoryEvent(
   if (result.found) {
     const previous = parts[result.index]
     if (shouldPreserveExistingPart(previous, part)) {
+      return false
+    }
+    if (arePartSnapshotsEqual(previous, part)) {
       return false
     }
     const dedupeFields = getUpdatedDeltaFields(previous, part)

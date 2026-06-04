@@ -2,6 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createGracefulShutdownRuntime } from './shutdown-runtime.js';
 
+const originalSetTimeout = globalThis.setTimeout;
+const originalClearTimeout = globalThis.clearTimeout;
+
+function setGlobal(name, value) {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    writable: true,
+    value,
+  });
+}
+
 const createRuntime = (server) => createGracefulShutdownRuntime({
   process: { exit: vi.fn() },
   shutdownTimeoutMs: 1000,
@@ -34,12 +45,25 @@ const createRuntime = (server) => createGracefulShutdownRuntime({
 
 describe('graceful shutdown runtime', () => {
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
+    setGlobal('setTimeout', originalSetTimeout);
+    setGlobal('clearTimeout', originalClearTimeout);
   });
 
   it('clears the server close timeout when the server closes first', async () => {
-    vi.useFakeTimers();
+    const activeTimers = new Set();
+    setGlobal('setTimeout', (handler, timeout, ...args) => {
+      const timer = originalSetTimeout(() => {
+        activeTimers.delete(timer);
+        handler(...args);
+      }, timeout);
+      activeTimers.add(timer);
+      return timer;
+    });
+    setGlobal('clearTimeout', (timer) => {
+      activeTimers.delete(timer);
+      return originalClearTimeout(timer);
+    });
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const server = {
       close: vi.fn((callback) => {
@@ -50,9 +74,7 @@ describe('graceful shutdown runtime', () => {
     const runtime = createRuntime(server);
     await runtime.gracefulShutdown({ exitProcess: false });
 
-    await vi.advanceTimersByTimeAsync(1000);
-
     expect(warnSpy).not.toHaveBeenCalledWith('Server close timeout reached, forcing shutdown');
-    expect(vi.getTimerCount()).toBe(0);
+    expect(activeTimers.size).toBe(0);
   });
 });

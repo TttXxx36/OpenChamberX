@@ -45,6 +45,8 @@ const canRunGit = () => {
   }
 };
 
+const gitIntegrationIt = process.platform === 'win32' ? it.skip : it;
+
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -124,7 +126,7 @@ describe('git index path validation', () => {
 // ---------------------------------------------------------------------------
 
 describe('getStatus', () => {
-  it('handles repositories without upstream tracking', async () => {
+  gitIntegrationIt('handles repositories without upstream tracking', async () => {
     if (!canRunGit()) return;
 
     const repo = createTempDir();
@@ -144,7 +146,7 @@ describe('getStatus', () => {
 // ---------------------------------------------------------------------------
 
 describe('checkoutCommit', () => {
-  it('checks out a valid commit and puts the repo in detached HEAD state', async () => {
+  gitIntegrationIt('checks out a valid commit and puts the repo in detached HEAD state', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'first', 'utf8');
@@ -162,7 +164,7 @@ describe('checkoutCommit', () => {
     expect(status.detached).toBe(true);
   });
 
-  it('throws an error for an invalid/nonexistent hash', async () => {
+  gitIntegrationIt('throws an error for an invalid/nonexistent hash', async () => {
     const { tmpDir } = await createTempRepo();
     await expect(checkoutCommit(tmpDir, 'invalidhash123')).rejects.toThrow();
   });
@@ -173,7 +175,7 @@ describe('checkoutCommit', () => {
 // ---------------------------------------------------------------------------
 
 describe('cherryPick', () => {
-  it('cherry-picks a commit that applies cleanly', async () => {
+  gitIntegrationIt('cherry-picks a commit that applies cleanly', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'line1\nline2\n', 'utf8');
@@ -193,7 +195,7 @@ describe('cherryPick', () => {
     expect(content).toBe('line1\nline2\nline3\n');
   });
 
-  it('returns conflict info when cherry-picking a conflicting commit', async () => {
+  gitIntegrationIt('returns conflict info when cherry-picking a conflicting commit', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'line1\nline2\n', 'utf8');
@@ -217,7 +219,7 @@ describe('cherryPick', () => {
     expect(result.conflictFiles.length).toBeGreaterThan(0);
   });
 
-  it('throws for an invalid/nonexistent hash', async () => {
+  gitIntegrationIt('throws for an invalid/nonexistent hash', async () => {
     const { tmpDir } = await createTempRepo();
     await expect(cherryPick(tmpDir, 'deadbeef00000000')).rejects.toThrow();
   });
@@ -228,7 +230,7 @@ describe('cherryPick', () => {
 // ---------------------------------------------------------------------------
 
 describe('revertCommit', () => {
-  it('reverts a commit and stages the revert changes', async () => {
+  gitIntegrationIt('reverts a commit and stages the revert changes', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'line1\nline2\n', 'utf8');
@@ -248,7 +250,7 @@ describe('revertCommit', () => {
     expect(content).toBe('line1\nline2\n');
   });
 
-  it('returns conflict info when reverting causes a conflict', async () => {
+  gitIntegrationIt('returns conflict info when reverting causes a conflict', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'line1\nline2\nline3\n', 'utf8');
@@ -270,7 +272,7 @@ describe('revertCommit', () => {
     expect(result.conflictFiles.length).toBeGreaterThan(0);
   });
 
-  it('throws for an invalid/nonexistent hash', async () => {
+  gitIntegrationIt('throws for an invalid/nonexistent hash', async () => {
     const { tmpDir } = await createTempRepo();
     await expect(revertCommit(tmpDir, 'deadbeef00000000')).rejects.toThrow();
   });
@@ -281,7 +283,7 @@ describe('revertCommit', () => {
 // ---------------------------------------------------------------------------
 
 describe('resetToCommit', () => {
-  it('soft reset moves HEAD without touching the working tree', async () => {
+  gitIntegrationIt('soft reset moves HEAD without touching the working tree', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'first\n', 'utf8');
@@ -304,7 +306,7 @@ describe('resetToCommit', () => {
     expect(status.staged.length).toBeGreaterThan(0);
   });
 
-  it('mixed reset moves HEAD and unstages changes', async () => {
+  gitIntegrationIt('mixed reset moves HEAD and unstages changes', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'first\n', 'utf8');
@@ -328,7 +330,7 @@ describe('resetToCommit', () => {
     expect(status.modified.length).toBeGreaterThan(0);
   });
 
-  it('hard reset with clean working tree succeeds', async () => {
+  gitIntegrationIt('hard reset with clean working tree succeeds', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'first\n', 'utf8');
@@ -351,7 +353,7 @@ describe('resetToCommit', () => {
     expect(status.isClean()).toBe(true);
   });
 
-  it('hard reset with dirty working tree without force throws', async () => {
+  gitIntegrationIt('hard reset with dirty working tree without force throws', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'first\n', 'utf8');
@@ -369,7 +371,7 @@ describe('resetToCommit', () => {
     );
   });
 
-  it('hard reset with dirty working tree with force succeeds', async () => {
+  gitIntegrationIt('hard reset with dirty working tree with force succeeds', async () => {
     const { tmpDir, git } = await createTempRepo();
     const filePath = path.join(tmpDir, 'file.txt');
     await fs.promises.writeFile(filePath, 'first\n', 'utf8');

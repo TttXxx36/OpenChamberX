@@ -5,10 +5,18 @@ const savedDocument = globalThis.document;
 const savedWindow = globalThis.window;
 const savedNavigator = globalThis.navigator;
 
+function setGlobal(name, value) {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    writable: true,
+    value,
+  });
+}
+
 afterEach(() => {
-  globalThis.document = savedDocument;
-  globalThis.window = savedWindow;
-  globalThis.navigator = savedNavigator;
+  setGlobal('document', savedDocument);
+  setGlobal('window', savedWindow);
+  setGlobal('navigator', savedNavigator);
 });
 
 function createEventTarget(extras = {}) {
@@ -35,11 +43,11 @@ function createEventTarget(extras = {}) {
 
 describe('createEventPipeline — permanent server errors', () => {
   it('uses the long backoff cap for 4xx so we do not hammer at 5s intervals', async () => {
-    globalThis.document = createEventTarget({ visibilityState: 'visible' });
-    globalThis.window = createEventTarget({
+    setGlobal('document', createEventTarget({ visibilityState: 'visible' }));
+    setGlobal('window', createEventTarget({
       location: { href: 'http://127.0.0.1:3000/', origin: 'http://127.0.0.1:3000' },
-    });
-    globalThis.navigator = { onLine: true };
+    }));
+    setGlobal('navigator', { onLine: true });
 
     let sdkCallIndex = 0;
     const sdk = {
@@ -128,11 +136,11 @@ describe('createEventPipeline — permanent server errors', () => {
   });
 
   it('retries 408 and 429 on the normal exponential path (not the permanent cap)', async () => {
-    globalThis.document = createEventTarget({ visibilityState: 'visible' });
-    globalThis.window = createEventTarget({
+    setGlobal('document', createEventTarget({ visibilityState: 'visible' }));
+    setGlobal('window', createEventTarget({
       location: { href: 'http://127.0.0.1:3000/', origin: 'http://127.0.0.1:3000' },
-    });
-    globalThis.navigator = { onLine: true };
+    }));
+    setGlobal('navigator', { onLine: true });
 
     let sdkCallIndex = 0;
     const sdk = {

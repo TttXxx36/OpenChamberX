@@ -1,5 +1,9 @@
-import { describe, expect, test, beforeEach, mock } from "bun:test"
+import { afterAll, describe, expect, test, beforeEach, mock } from "bun:test"
 import type { PermissionRequest } from "@/types/permission"
+
+afterAll(() => {
+  mock.restore()
+})
 
 // Mock SDK client that records permission.reply / question.reply calls
 const replyCalls: Array<{ method: string; params: Record<string, unknown> }> = []
@@ -63,6 +67,7 @@ mock.module("@/lib/opencode/client", () => ({
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     getScopedSdkClient: (_: string) => mockScopedClient,
     getDirectory: () => "/test/project",
+    setDirectory: () => undefined,
     replyToPermission: mock((requestId: string, reply: string, options?: { directory?: string | null }) => {
       replyCalls.push({ method: "permission.reply", params: { requestID: requestId, reply, directory: options?.directory } })
       return Promise.resolve(true)
@@ -95,19 +100,6 @@ mock.module("@/stores/useConfigStore", () => ({
   },
 }))
 
-// Mock useSessionUIStore
-mock.module("./session-ui-store", () => ({
-  useSessionUIStore: {
-    getState: () => ({
-      getDirectoryForSession: (sessionId: string) => {
-        if (sessionId === "session-a") return "/test/project"
-        if (sessionId === "session-b") return "/other/project"
-        return null
-      },
-    }),
-  },
-}))
-
 // Mock useInputStore
 const inputState = {
   pendingInputText: "",
@@ -130,18 +122,17 @@ mock.module("./input-store", () => ({
 
 // Mock useGlobalSessionsStore (imported but not used in permission functions)
 mock.module("@/stores/useGlobalSessionsStore", () => ({
-  useGlobalSessionsStore: {},
-}))
-
-// Mock sync-refs (imported but not used in permission functions)
-mock.module("./sync-refs", () => ({
-  registerSessionDirectory: () => {},
+  resolveGlobalSessionDirectory: () => null,
+  useGlobalSessionsStore: {
+    getState: () => ({ activeSessions: [], archivedSessions: [] }),
+  },
 }))
 
 import { create, type StoreApi } from "zustand"
 import { INITIAL_STATE } from "./types"
 import type { DirectoryStore } from "./child-store"
 import type { Message, OpencodeClient, Part, Session } from "@opencode-ai/sdk/v2/client"
+import { useSessionWorktreeStore } from "./session-worktree-store"
 
 function createStore(
   permissions: Record<string, PermissionRequest[]>,
@@ -167,8 +158,36 @@ function createChildStores(entries: Array<[string, StoreApi<DirectoryStore>]>) {
   } as unknown as import("./child-store").ChildStoreManager
 }
 
+function seedSessionDirectories() {
+  const store = useSessionWorktreeStore.getState()
+  for (const sessionId of store.attachments.keys()) {
+    store.clearAttachment(sessionId)
+  }
+  store.setAttachment("session-a", {
+    worktreeRoot: "/test/project",
+    cwd: "/test/project",
+    branch: null,
+    headState: "branch",
+    worktreeStatus: "ready",
+    worktreeSource: "existing",
+    legacy: false,
+    degraded: false,
+  })
+  store.setAttachment("session-b", {
+    worktreeRoot: "/other/project",
+    cwd: "/other/project",
+    branch: null,
+    headState: "branch",
+    worktreeStatus: "ready",
+    worktreeSource: "existing",
+    legacy: false,
+    degraded: false,
+  })
+}
+
 describe("respondToPermission passes directory", () => {
   beforeEach(() => {
+    seedSessionDirectories()
     replyCalls.length = 0
     sessionRevertResult = {}
   })
@@ -228,6 +247,7 @@ describe("respondToPermission passes directory", () => {
 
 describe("revertToMessage passes session directory", () => {
   beforeEach(() => {
+    seedSessionDirectories()
     replyCalls.length = 0
     sessionRevertResult = {}
     Object.assign(inputState, {
