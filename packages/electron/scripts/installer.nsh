@@ -4,6 +4,7 @@
   nsExec::Exec '"$SYSDIR\taskkill.exe" /f /im OpenChamber.exe'
 !macroend
 
+!ifndef BUILD_UNINSTALLER
 Function OpenChamberIsExistingInstall
   ClearErrors
   IfFileExists "$INSTDIR\OpenChamber.exe" 0 checkResources
@@ -24,7 +25,6 @@ Function OpenChamberIsExistingInstall
   Push 0
 FunctionEnd
 
-!ifndef BUILD_UNINSTALLER
 Function OpenChamberRemoveOldApplicationFiles
   Call OpenChamberIsExistingInstall
   Pop $0
