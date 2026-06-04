@@ -1479,14 +1479,22 @@ const useFileReferenceInteractions = ({
       }
 
       const rawCandidate = getFileReferenceCandidateFromAnchor(anchor.getAttribute('href'), anchor.textContent);
-      if (!rawCandidate || !getResolvedReference(rawCandidate, getFileReferenceBaseDirectory({ referenceDirectory, effectiveDirectory }))) {
+      const resolvedCandidate = rawCandidate
+        ? getResolvedReference(rawCandidate, getFileReferenceBaseDirectory({ referenceDirectory, effectiveDirectory }))
+        : null;
+      if (!rawCandidate || !resolvedCandidate) {
         return;
       }
 
       event.preventDefault();
       event.stopPropagation();
 
-      openFileReference(anchor, rawCandidate);
+      void fileReferenceExists(resolvedCandidate.resolvedPath).then((exists) => {
+        if (!exists || !container.contains(anchor)) {
+          return;
+        }
+        openFileReference(anchor, rawCandidate);
+      });
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {

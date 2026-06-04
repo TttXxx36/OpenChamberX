@@ -17,6 +17,7 @@ import { streamPerfCount, streamPerfMeasure } from '@/stores/utils/streamDebug';
 import type { StreamPhase } from './message/types';
 import { normalizeParts } from './message/partUtils';
 import { getCenteredScrollTop, getNaturalBubbleTop, isWithinScrollTolerance } from './MessageList.logic';
+import { readTaskSessionIdFromOutput, readTaskSessionIdFromRecord } from './message/taskSessionId';
 
 const MESSAGE_LIST_VIRTUALIZE_THRESHOLD = 5;
 const MESSAGE_LIST_OVERSCAN = 6;
@@ -247,21 +248,12 @@ const readTaskSessionId = (toolPart: Part): string | null => {
         };
     };
     const metadata = partRecord.state?.metadata;
-    const fromMetadata =
-        (typeof metadata?.sessionID === 'string' && metadata.sessionID.trim().length > 0
-            ? metadata.sessionID.trim()
-            : null)
-        ?? (typeof metadata?.sessionId === 'string' && metadata.sessionId.trim().length > 0
-            ? metadata.sessionId.trim()
-            : null);
+    const fromMetadata = readTaskSessionIdFromRecord(metadata) ?? null;
     if (fromMetadata) return fromMetadata;
 
     const output = partRecord.state?.output;
     if (typeof output === 'string') {
-        const match = output.match(/task_id\s*:\s*([^\s<"']+)/i);
-        if (match?.[1]) {
-            return match[1];
-        }
+        return readTaskSessionIdFromOutput(output) ?? null;
     }
 
     return null;

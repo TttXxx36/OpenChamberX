@@ -46,6 +46,7 @@ import { areRenderRelevantPartsEqual } from '../renderCompare';
 import { useI18n } from '@/lib/i18n';
 import { getDiffPatchEntries, getPatchText } from './toolDiffUtils';
 import { resolveSubtaskPanelDirectory } from '../subtaskPanel';
+import { readTaskSessionIdFromOutput, readTaskSessionIdFromRecord } from '../taskSessionId';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-4 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -816,27 +817,7 @@ type TaskToolSummaryEntry = {
 
 type SessionMessageWithParts = MessageRecord;
 
-const normalizeSessionIdCandidate = (value: unknown): string | undefined => {
-    if (typeof value !== 'string') {
-        return undefined;
-    }
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-};
-
-const readTaskSessionIdFromRecord = (value: unknown): string | undefined => {
-    if (!value || typeof value !== 'object') {
-        return undefined;
-    }
-
-    const record = value as Record<string, unknown>;
-    return (
-        normalizeSessionIdCandidate(record.sessionID)
-        ?? normalizeSessionIdCandidate(record.sessionId)
-    );
-};
-
-const readTaskSessionIdFromOutput = (output: string | undefined): string | undefined => {
+const readTaskSessionIdFromTaskOutput = (output: string | undefined): string | undefined => {
     if (typeof output !== 'string' || output.trim().length === 0) {
         return undefined;
     }
@@ -844,10 +825,7 @@ const readTaskSessionIdFromOutput = (output: string | undefined): string | undef
     if (parsedMetadata.sessionId) {
         return parsedMetadata.sessionId;
     }
-    const taskMatch = output.match(/task_id\s*:\s*([^\s<"']+)/i);
-    const sessionMatch = output.match(/session[_\s-]?id\s*:\s*([^\s<"']+)/i);
-    const candidate = taskMatch?.[1] ?? sessionMatch?.[1];
-    return normalizeSessionIdCandidate(candidate);
+    return readTaskSessionIdFromOutput(output);
 };
 
 const buildTaskSummaryEntriesFromSession = (messages: SessionMessageWithParts[]): TaskToolSummaryEntry[] => {
@@ -2012,7 +1990,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         if (parsedTaskMetadata.sessionId) {
             return parsedTaskMetadata.sessionId;
         }
-        return readTaskSessionIdFromOutput(taskOutputString);
+        return readTaskSessionIdFromTaskOutput(taskOutputString);
     }, [isTaskTool, metadata, parsedTaskMetadata.sessionId, partMetadata, taskOutputString]);
 
     const fallbackTaskSessionId = useDirectorySync(
@@ -2077,7 +2055,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         return false;
     }, [childSessionMessages, isTaskTool, taskSessionId]);
 
-    const childSessionActivity = useSessionActivity(taskSessionId, currentDirectory);
+    const childSessionActivity = useSessionActivity(taskSessionId, taskPanelDirectory);
     const [taskChildSeenActive, setTaskChildSeenActive] = React.useState(false);
     const [taskChildPollingStopped, setTaskChildPollingStopped] = React.useState(false);
     const [taskPendingFinalFetch, setTaskPendingFinalFetch] = React.useState(false);
@@ -2198,7 +2176,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         childSessionActivity.phase,
         childSessionHasInFlightTools,
         childSessionTaskSummaryEntries.length,
-        currentDirectory,
+        taskPanelDirectory,
         hasFinalMetadataTaskSummary,
         activeLatched,
         isFinalized,
@@ -2219,7 +2197,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
 
         const runFinalFetch = async () => {
             try {
-                const scopedClient = opencodeClient.getScopedSdkClient(currentDirectory);
+                const scopedClient = opencodeClient.getScopedSdkClient(taskPanelDirectory);
                 const response = await scopedClient.session.messages({
                     sessionID: capturedSessionId,
                     limit: isVSCodeRuntime() ? VSCODE_TASK_TOOL_INITIAL_FETCH_LIMIT : TASK_TOOL_INITIAL_FETCH_LIMIT,
@@ -2232,7 +2210,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 const messages = response.data ?? [];
                 if (Array.isArray(messages) && messages.length > 0) {
                     const childStores = getSyncChildStores();
-                    childStores.update(currentDirectory, (prev) => {
+                    childStores.update(taskPanelDirectory, (prev) => {
                         const records = messages as SessionMessageWithParts[];
                         const partPatch: Record<string, import('@opencode-ai/sdk/v2').Part[]> = { ...prev.part };
                         for (const rec of records) {
@@ -2263,11 +2241,11 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             cancelled = true;
         };
     }, [
-        currentDirectory,
         hasFinalMetadataTaskSummary,
         isTaskTool,
         taskChildPollingStopped,
         taskPendingFinalFetch,
+        taskPanelDirectory,
         taskSessionId,
     ]);
 
@@ -2374,7 +2352,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
 
         const fetchSessionMessages = async (isInitialFetch: boolean) => {
             try {
-                const scopedClient = opencodeClient.getScopedSdkClient(currentDirectory);
+                const scopedClient = opencodeClient.getScopedSdkClient(taskPanelDirectory);
                 const response = await scopedClient.session.messages({
                     sessionID: taskSessionId,
                     limit: resolveFetchLimit(isInitialFetch),
@@ -2394,7 +2372,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                 taskPollNoChangeCountRef.current = 0;
                 // Inject fetched subagent messages into sync child store
                 const childStores = getSyncChildStores();
-                childStores.update(currentDirectory, (prev) => {
+                childStores.update(taskPanelDirectory, (prev) => {
                     const records = messages as SessionMessageWithParts[];
                     const partPatch: Record<string, import('@opencode-ai/sdk/v2').Part[]> = { ...prev.part };
                     for (const rec of records) {
@@ -2424,12 +2402,12 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
         childSessionActivity.phase,
         childSessionHasInFlightTools,
         childSessionTaskSummaryEntries.length,
-        currentDirectory,
         hasFinalMetadataTaskSummary,
         isActive,
         isTaskTool,
         taskPendingFinalFetch,
         taskChildPollingStopped,
+        taskPanelDirectory,
         taskSessionId,
     ]);
 

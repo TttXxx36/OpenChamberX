@@ -1717,6 +1717,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           if (root) {
             removeOpenPathsByPrefix(root, node.path);
           }
+          setFileLoading(false);
           setFileContent('');
           setDraftContent('');
           setFileError(null);
