@@ -11,6 +11,7 @@ type OverlayScrollbarProps = {
   suppressVisibility?: boolean;
   userIntentOnly?: boolean;
   alwaysVisible?: boolean;
+  useNativeScrollbar?: boolean;
 };
 
 type ThumbMetrics = {
@@ -36,6 +37,7 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
   suppressVisibility = false,
   userIntentOnly = false,
   alwaysVisible = false,
+  useNativeScrollbar = false,
 }) => {
   const [visible, setVisible] = React.useState(alwaysVisible);
   const [vertical, setVertical] = React.useState<ThumbMetrics>({ length: 0, offset: 0 });
@@ -231,7 +233,7 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
       if (metricsFrameRef.current) cancelAnimationFrame(metricsFrameRef.current);
     };
-  }, [containerRef, handleScroll, markUserIntent, observeMutations, scheduleMetricsUpdate, syncObservedElements, updateMetrics, userIntentOnly]);
+  }, [containerRef, handleScroll, markUserIntent, observeMutations, scheduleMetricsUpdate, syncObservedElements, updateMetrics, userIntentOnly, alwaysVisible]);
 
   React.useEffect(() => {
     if (!suppressVisibility) {
@@ -314,6 +316,7 @@ const OverlayScrollbarComponent: React.FC<OverlayScrollbarProps> = ({
 
   const showVertical = vertical.length > 0;
   const showHorizontal = horizontal.length > 0;
+  if (useNativeScrollbar) return null;
   if (!showVertical && !showHorizontal) return null;
 
   const trackInset = 8;

@@ -161,30 +161,31 @@ type ChatViewportProps = {
     scrollToBottom: () => void;
     sessionQuestions: QuestionRequest[];
     sessionPermissions: PermissionRequest[];
-    isProgrammaticFollowActive: boolean;
+  isProgrammaticFollowActive: boolean;
 };
 
 const ChatViewport = React.memo(({
-    currentSessionId,
-    isDesktopExpandedInput,
-    isMobile,
-    stickyUserHeader,
-    scrollRef,
-    messageListRef,
-    pendingRevealWork,
-    renderedMessages,
-    isLoadingOlder,
-    sessionIsWorking,
-    streamingMessageId,
-    activeStreamingPhase,
-    retryOverlay,
-    handleMessageContentChange,
-    getAnimationHandlers,
-    handleHistoryScroll,
-    scrollToBottom,
-    sessionQuestions,
-    sessionPermissions,
-    isProgrammaticFollowActive,
+  currentSessionId,
+  isDesktopExpandedInput,
+  isMobile,
+  stickyUserHeader,
+  scrollRef,
+  messageListRef,
+  pendingRevealWork,
+  renderedMessages,
+  isLoadingOlder,
+  sessionIsWorking,
+  streamingMessageId,
+  activeStreamingPhase,
+  retryOverlay,
+  handleMessageContentChange,
+  getAnimationHandlers,
+  handleHistoryScroll,
+  scrollToBottom,
+  sessionQuestions,
+  sessionPermissions,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isProgrammaticFollowActive,
 }: ChatViewportProps) => {
     const focusScrollContainer = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
         if (event.defaultPrevented || shouldIgnoreChatNavigationTarget(event.target)) {
@@ -255,7 +256,7 @@ const ChatViewport = React.memo(({
                         <div className="flex-shrink-0" style={{ height: isMobile ? '40px' : '10vh' }} aria-hidden="true" />
                     </div>
                 </ScrollShadow>
-                <OverlayScrollbar containerRef={scrollRef} alwaysVisible observeMutations={false} />
+                <OverlayScrollbar containerRef={scrollRef} alwaysVisible observeMutations={false} useNativeScrollbar />
                 <ChatScrollMarkers
                   messages={renderedMessages}
                   messageListRef={messageListRef}

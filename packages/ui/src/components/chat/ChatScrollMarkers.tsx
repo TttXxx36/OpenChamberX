@@ -5,6 +5,15 @@ import type { MessageListHandle } from './MessageList';
 import { deriveMessageRole } from './message/messageRole';
 import { cn } from '@/lib/utils';
 
+const DOT_SIZE = 7;
+const DOT_SIZE_ACTIVE = 10;
+const RAIL_WIDTH = 20;
+const RAIL_RIGHT_OFFSET = 26;
+const PREVIEW_MAX_LENGTH = 80;
+const OBSERVE_THROTTLE_MS = 100;
+const TOOLTIP_SHOW_DELAY_MS = 300;
+const RAIL_PADDING_Y = 16;
+
 interface ChatScrollMarkersProps {
   messages: Array<{ info: Message; parts: Part[] }>;
   messageListRef: React.RefObject<MessageListHandle | null>;
@@ -15,41 +24,102 @@ function getMessagePreview(msg: { info: Message; parts: Part[] }): string {
   for (const part of msg.parts) {
     if (part.type === 'text') {
       const text = (part as Extract<Part, { type: 'text' }>).text ?? '';
-      const trimmed = text.slice(0, 80).trim();
-      return trimmed.length < text.trim().length ? `${trimmed}...` : trimmed;
+      const trimmed = text.slice(0, PREVIEW_MAX_LENGTH).trim();
+      return trimmed.length < text.trim().length ? `${trimmed}\u2026` : trimmed;
     }
   }
   return '\uD83D\uDCCE Attachment';
 }
 
-interface DotProps {
-  messageId: string;
-  topPct: number;
-  isActive: boolean;
+interface DotData {
+  id: string;
   preview: string;
-  onDotClick: (messageId: string) => void;
+  index: number;
 }
 
-const DotButton: React.FC<DotProps> = React.memo(({ messageId, topPct, isActive, preview, onDotClick }) => {
-  return (
-    <button
-      type="button"
-      data-user-message-marker={messageId}
-      title={preview}
-      className={cn(
-        'absolute left-1/2 -translate-x-1/2 -translate-y-1/2',
-        'w-[7px] h-[7px] rounded-full border-0 p-0 m-0 cursor-pointer',
-        'transition-all duration-150 ease-out z-10',
-        isActive
-          ? 'bg-[var(--primary)] shadow-sm scale-125'
-          : 'bg-[var(--muted-foreground)] opacity-60 hover:opacity-100 hover:scale-110',
-      )}
-      style={{ top: `${topPct}%` }}
-      onClick={() => onDotClick(messageId)}
-      aria-label={`Go to message ${messageId}`}
-    />
-  );
-});
+interface DotProps {
+  dot: DotData;
+  topPx: number;
+  trackHeight: number;
+  isActive: boolean;
+  onDotClick: (id: string) => void;
+  onDotHover: (id: string | null) => void;
+}
+
+const DotButton: React.FC<DotProps> = React.memo(
+  ({ dot, topPx, trackHeight, isActive, onDotClick, onDotHover }) => {
+    const size = isActive ? DOT_SIZE_ACTIVE : DOT_SIZE;
+    const [showTooltip, setShowTooltip] = React.useState(false);
+    const tooltipTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const handleMouseEnter = React.useCallback(() => {
+      onDotHover(dot.id);
+      tooltipTimerRef.current = setTimeout(
+        () => setShowTooltip(true),
+        TOOLTIP_SHOW_DELAY_MS,
+      );
+    }, [dot.id, onDotHover]);
+
+    const handleMouseLeave = React.useCallback(() => {
+      onDotHover(null);
+      if (tooltipTimerRef.current) {
+        clearTimeout(tooltipTimerRef.current);
+        tooltipTimerRef.current = null;
+      }
+      setShowTooltip(false);
+    }, [onDotHover]);
+
+    const handleClick = React.useCallback(
+      (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onDotClick(dot.id);
+      },
+      [dot.id, onDotClick],
+    );
+
+    const clampedTop = Math.max(0, Math.min(topPx, trackHeight));
+
+    return (
+      <button
+        type="button"
+        data-user-message-marker={dot.id}
+        className={cn(
+          'absolute left-1/2 -translate-x-1/2 -translate-y-1/2',
+          'rounded-full border-0 p-0 m-0 cursor-pointer z-10',
+          'transition-all duration-150 ease-out',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-1',
+          isActive
+            ? 'bg-[var(--primary)] shadow-[0_0_6px_var(--primary)]'
+            : 'bg-muted-foreground/50 hover:bg-muted-foreground hover:scale-125',
+        )}
+        style={{
+          top: `${clampedTop}px`,
+          width: `${size}px`,
+          height: `${size}px`,
+        }}
+        onClick={handleClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        aria-label={`Go to question ${dot.index + 1}: ${dot.preview}`}
+      >
+        {showTooltip && (
+          <span
+            className={cn(
+              'absolute right-full mr-2 top-1/2 -translate-y-1/2',
+              'whitespace-nowrap max-w-[240px] truncate',
+              'px-2.5 py-1.5 rounded-md text-xs',
+              'bg-popover text-popover-foreground border border-border shadow-md',
+              'pointer-events-none z-50',
+            )}
+            role="tooltip"
+          >
+            {dot.preview}
+          </span>
+        )}
+      </button>
+    );
+  },
+);
 
 DotButton.displayName = 'DotButton';
 
@@ -74,67 +144,100 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
   scrollContainerRef,
 }) => {
   const [activeMessageId, setActiveMessageId] = React.useState<string | null>(null);
+  const [hoveredMessageId, setHoveredMessageId] = React.useState<string | null>(null);
   const [dotPositions, setDotPositions] = React.useState<Map<string, number>>(new Map());
+  const [trackHeight, setTrackHeight] = React.useState(0);
+  const railRef = React.useRef<HTMLDivElement>(null);
 
   const userMessages = React.useMemo(() => {
     return messages.filter((m) => deriveMessageRole(m.info).isUser);
   }, [messages]);
 
-  const previews = React.useMemo(() => {
-    const map = new Map<string, string>();
-    for (const msg of userMessages) {
-      map.set(String(msg.info.id), getMessagePreview(msg));
-    }
-    return map;
+  const dots: DotData[] = React.useMemo(() => {
+    return userMessages.map((msg, index) => ({
+      id: String(msg.info.id),
+      preview: getMessagePreview(msg),
+      index,
+    }));
   }, [userMessages]);
 
-  /* Recalculate dot positions on scroll / resize */
+  const recalcRef = React.useRef<{
+    rafId: number;
+    lastFireTime: number;
+  }>({ rafId: 0, lastFireTime: 0 });
+
   React.useEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container || userMessages.length === 0) return;
-
-    let rafId: number;
-    let resizeObserver: ResizeObserver | null = null;
+    if (!container || dots.length === 0) {
+      setDotPositions(new Map());
+      setTrackHeight(0);
+      return;
+    }
 
     const recalc = () => {
       const { scrollHeight, clientHeight } = container;
-      const scrollable = scrollHeight - clientHeight;
-      if (scrollable <= 0) return;
+      if (scrollHeight <= clientHeight) {
+        setDotPositions(new Map());
+        setTrackHeight(0);
+        return;
+      }
+
+      const railEl = railRef.current;
+      const railHeight = railEl ? railEl.clientHeight : clientHeight;
+      setTrackHeight(railHeight);
+
+      const usableHeight = Math.max(railHeight - RAIL_PADDING_Y * 2, 0);
 
       const positions = new Map<string, number>();
-      for (const msg of userMessages) {
-        const el = container.querySelector(`[data-message-id="${msg.info.id}"]`);
+      for (const dot of dots) {
+        const el = container.querySelector(`[data-message-id="${dot.id}"]`) as HTMLElement | null;
         if (!el) continue;
-        const pct = ((el as HTMLElement).offsetTop / scrollable) * 100;
-        positions.set(String(msg.info.id), Math.min(100, Math.max(0, pct)));
+
+        const elTop = el.offsetTop;
+        const ratio = elTop / scrollHeight;
+        const pixelY = RAIL_PADDING_Y + ratio * usableHeight;
+        positions.set(dot.id, pixelY);
       }
       setDotPositions(positions);
     };
 
-    const scheduleRecalc = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(recalc);
+    const throttledRecalc = () => {
+      const now = Date.now();
+      if (now - recalcRef.current.lastFireTime < OBSERVE_THROTTLE_MS) {
+        if (!recalcRef.current.rafId) {
+          recalcRef.current.rafId = requestAnimationFrame(() => {
+            recalcRef.current.rafId = 0;
+            recalcRef.current.lastFireTime = Date.now();
+            recalc();
+          });
+        }
+        return;
+      }
+      recalcRef.current.lastFireTime = Date.now();
+      recalc();
     };
 
     recalc();
-    container.addEventListener('scroll', scheduleRecalc, { passive: true });
+    container.addEventListener('scroll', throttledRecalc, { passive: true });
 
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver(scheduleRecalc);
-      resizeObserver.observe(container);
-    }
+    const resizeObserver = new ResizeObserver(throttledRecalc);
+    resizeObserver.observe(container);
 
+    const mutationObserver = new MutationObserver(throttledRecalc);
+    mutationObserver.observe(container, { childList: true, subtree: true });
+
+    const currentRafId = recalcRef.current.rafId;
     return () => {
-      cancelAnimationFrame(rafId);
-      container.removeEventListener('scroll', scheduleRecalc);
-      resizeObserver?.disconnect();
+      cancelAnimationFrame(currentRafId);
+      container.removeEventListener('scroll', throttledRecalc);
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
     };
-  }, [userMessages, scrollContainerRef]);
+  }, [dots, scrollContainerRef]);
 
-  /* Track which user message is closest to viewport center */
   React.useEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container || userMessages.length === 0) return;
+    if (!container || dots.length === 0) return;
 
     let rafId: number;
 
@@ -144,15 +247,15 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
       let closestId: string | null = null;
       let closestDist = Infinity;
 
-      for (const msg of userMessages) {
-        const el = container.querySelector(`[data-message-id="${msg.info.id}"]`);
+      for (const dot of dots) {
+        const el = container.querySelector(`[data-message-id="${dot.id}"]`);
         if (!el) continue;
         const rect = el.getBoundingClientRect();
         const elCenter = rect.top + rect.height / 2;
         const dist = Math.abs(elCenter - centerY);
         if (dist < closestDist) {
           closestDist = dist;
-          closestId = String(msg.info.id);
+          closestId = dot.id;
         }
       }
       setActiveMessageId(closestId);
@@ -170,7 +273,7 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
       cancelAnimationFrame(rafId);
       container.removeEventListener('scroll', scheduleUpdate);
     };
-  }, [userMessages, scrollContainerRef]);
+  }, [dots, scrollContainerRef]);
 
   const handleDotClick = React.useCallback(
     (messageId: string) => {
@@ -179,30 +282,46 @@ export const ChatScrollMarkers: React.FC<ChatScrollMarkersProps> = ({
     [scrollContainerRef, messageListRef],
   );
 
-  if (userMessages.length === 0) return null;
+  const handleDotHover = React.useCallback((id: string | null) => {
+    setHoveredMessageId(id);
+  }, []);
+
+  if (dots.length === 0) return null;
+
+  const highlightedId = hoveredMessageId ?? activeMessageId;
 
   return (
     <div
-      className="absolute right-[26px] inset-y-0 z-20 w-[14px] pointer-events-none"
+      ref={railRef}
+      className={cn(
+        'absolute inset-y-0 z-20 pointer-events-none',
+      )}
+      style={{
+        right: `${RAIL_RIGHT_OFFSET}px`,
+        width: `${RAIL_WIDTH}px`,
+      }}
       aria-hidden="true"
     >
       {/* Vertical track line */}
-      <div className="absolute inset-y-4 left-1/2 -translate-x-1/2 w-[1px] bg-border/30 rounded-full pointer-events-none" />
+      <div
+        className="absolute left-1/2 -translate-x-1/2 w-px bg-border/30 rounded-full pointer-events-none"
+        style={{ top: `${RAIL_PADDING_Y}px`, bottom: `${RAIL_PADDING_Y}px` }}
+      />
 
-      {/* Dots */}
-      <div className="relative w-full h-full pointer-events-none">
-        {userMessages.map((msg) => {
-          const messageId = String(msg.info.id);
-          const topPct = dotPositions.get(messageId);
-          if (topPct === undefined) return null;
+      {/* Dot container */}
+      <div className="relative w-full h-full pointer-events-auto">
+        {dots.map((dot) => {
+          const topPx = dotPositions.get(dot.id);
+          if (topPx === undefined) return null;
           return (
             <DotButton
-              key={messageId}
-              messageId={messageId}
-              topPct={topPct}
-              isActive={activeMessageId === messageId}
-              preview={previews.get(messageId) ?? ''}
+              key={dot.id}
+              dot={dot}
+              topPx={topPx}
+              trackHeight={trackHeight}
+              isActive={highlightedId === dot.id}
               onDotClick={handleDotClick}
+              onDotHover={handleDotHover}
             />
           );
         })}

@@ -567,21 +567,56 @@ html:not(.dark) .chat-scroll {
   background: transparent !important;
 }
 
-/* Hide native scrollbars for overlay targets (all browsers) */
-.overlay-scrollbar-target {
+/* Chat scrollbar: always visible native scrollbar */
+.overlay-scrollbar-target[data-scrollbar="chat"] {
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--oc-scrollbar-thumb) transparent !important;
+  scrollbar-gutter: stable both-edges !important;
+  -ms-overflow-style: auto !important;
+}
+
+.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+  display: block !important;
+}
+
+.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar-thumb {
+  background: var(--oc-scrollbar-thumb) !important;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  min-height: 32px;
+}
+
+.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar-thumb:hover {
+  background: var(--oc-scrollbar-thumb-hover) !important;
+  background-clip: padding-box;
+}
+
+.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.overlay-scrollbar-target[data-scrollbar="chat"]::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* Non-chat overlay targets: keep hidden */
+.overlay-scrollbar-target:not([data-scrollbar="chat"]) {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
   scrollbar-gutter: auto !important;
 }
 
-.overlay-scrollbar-target--no-gutter {
-  scrollbar-gutter: unset !important;
-}
-
-.overlay-scrollbar-target::-webkit-scrollbar {
+.overlay-scrollbar-target:not([data-scrollbar="chat"])::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
   display: none !important;
+}
+
+.overlay-scrollbar-target--no-gutter {
+  scrollbar-gutter: unset !important;
 }
 
 /* Firefox scrollbar support */
