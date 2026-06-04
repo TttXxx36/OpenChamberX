@@ -1030,6 +1030,11 @@ const AssistantMessageBody = React.memo(({
     const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
     const projects = useProjectsStore((state) => state.projects);
     const effectiveDirectory = useEffectiveDirectory();
+    const referenceDirectory = React.useMemo(() => {
+        return (sessionId ? getDirectoryForSession(sessionId) : null)
+            ?? effectiveDirectory
+            ?? '';
+    }, [effectiveDirectory, getDirectoryForSession, sessionId]);
     const [isPlanDialogOpen, setIsPlanDialogOpen] = React.useState(false);
     const [isSavingPlan, setIsSavingPlan] = React.useState(false);
     const [isForkDialogOpen, setIsForkDialogOpen] = React.useState(false);
@@ -1569,6 +1574,7 @@ const AssistantMessageBody = React.memo(({
                             streamPhase={effectiveStreamPhase}
                             chatRenderMode={chatRenderMode}
                             onContentChange={onContentChange}
+                            referenceDirectory={referenceDirectory}
                         />
                     </div>
                 );
@@ -1603,6 +1609,7 @@ const AssistantMessageBody = React.memo(({
                                 streamPhase={effectiveStreamPhase}
                                 chatRenderMode={chatRenderMode}
                                 onContentChange={onContentChange}
+                                referenceDirectory={referenceDirectory}
                             />
                         );
                     } else if (groupReasoningBlocks) {
@@ -1616,6 +1623,7 @@ const AssistantMessageBody = React.memo(({
                                     messageId={messageId}
                                     streamPhase={effectiveStreamPhase}
                                     onContentChange={onContentChange}
+                                    referenceDirectory={referenceDirectory}
                                 />
                             );
                         }
@@ -1628,6 +1636,7 @@ const AssistantMessageBody = React.memo(({
                                 messageId={messageId}
                                 streamPhase={effectiveStreamPhase}
                                 onContentChange={onContentChange}
+                                referenceDirectory={referenceDirectory}
                             />
                         );
                     }
@@ -1731,6 +1740,7 @@ const AssistantMessageBody = React.memo(({
         onContentChange,
         onShowPopup,
         onToggleTool,
+        referenceDirectory,
         shouldRenderActivityGroup,
         shouldShowStandaloneMessageActions,
         shouldShowTool,

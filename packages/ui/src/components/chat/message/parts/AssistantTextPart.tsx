@@ -18,6 +18,7 @@ interface AssistantTextPartProps {
     streamPhase: StreamPhase;
     chatRenderMode?: 'sorted' | 'live';
     onContentChange?: (reason?: ContentChangeReason, messageId?: string) => void;
+    referenceDirectory?: string | null;
 }
 
 const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
@@ -25,6 +26,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     messageId,
     streamPhase,
     chatRenderMode = 'live',
+    referenceDirectory,
 }) => {
     // Use part directly from props — parent provides the latest version from the store.
     // No store subscription here to avoid re-render cascade from unrelated delta events.
@@ -99,6 +101,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
                 disableStreamAnimation={chatRenderMode === 'sorted'}
                 variant={part.type === 'reasoning' ? 'reasoning' : 'assistant'}
                 enableFileReferences={isFinalized}
+                referenceDirectory={referenceDirectory}
             />
         </div>
     );

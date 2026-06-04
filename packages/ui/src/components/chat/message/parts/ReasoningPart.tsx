@@ -85,6 +85,7 @@ type ReasoningTimelineBlockProps = {
     showDuration?: boolean;
     isStreaming?: boolean;
     actions?: React.ReactNode;
+    referenceDirectory?: string | null;
     /** Override the initial expanded state. Defaults to `isStreaming`. */
     defaultExpanded?: boolean;
 };
@@ -102,6 +103,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     time,
     isStreaming = false,
     actions,
+    referenceDirectory,
     defaultExpanded,
 }) => {
     const { t } = useI18n();
@@ -395,6 +397,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                                     isAnimated={false}
                                     isStreaming={isStreaming}
                                     variant="reasoning"
+                                    referenceDirectory={referenceDirectory}
                                 />
                             </div>
                             {actions ? (
@@ -417,6 +420,7 @@ type ReasoningPartProps = {
     onContentChange?: (reason?: ContentChangeReason) => void;
     messageId: string;
     streamPhase?: StreamPhase;
+    referenceDirectory?: string | null;
 };
 
 const ReasoningPart = React.memo(({
@@ -424,6 +428,7 @@ const ReasoningPart = React.memo(({
     onContentChange,
     messageId,
     streamPhase,
+    referenceDirectory,
 }: ReasoningPartProps) => {
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
     const partWithText = part as PartWithText;
@@ -452,6 +457,7 @@ const ReasoningPart = React.memo(({
             blockId={part.id || `${messageId}-reasoning`}
             time={time}
             isStreaming={isStreaming}
+            referenceDirectory={referenceDirectory}
         />
     );
 });
@@ -461,6 +467,7 @@ type MergedReasoningPartProps = {
     onContentChange?: (reason?: ContentChangeReason) => void;
     messageId: string;
     streamPhase?: StreamPhase;
+    referenceDirectory?: string | null;
 };
 
 /**
@@ -473,6 +480,7 @@ export const MergedReasoningPart = React.memo(({
     onContentChange,
     messageId,
     streamPhase,
+    referenceDirectory,
 }: MergedReasoningPartProps) => {
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
 
@@ -532,6 +540,7 @@ export const MergedReasoningPart = React.memo(({
             blockId={blockId}
             time={mergedTime}
             isStreaming={isStreaming}
+            referenceDirectory={referenceDirectory}
         />
     );
 });
