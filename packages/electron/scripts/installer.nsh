@@ -61,6 +61,7 @@ Function OpenChamberCleanUpgradePageLeave
   ${NSD_GetState} $OpenChamberCleanUpgradeCheckbox $OpenChamberCleanUpgradeChoice
 FunctionEnd
 
+!ifndef BUILD_UNINSTALLER
 Function OpenChamberRemoveOldApplicationFiles
   Call OpenChamberIsExistingInstall
   Pop $0
@@ -88,6 +89,7 @@ Function OpenChamberRemoveOldApplicationFiles
 
   done:
 FunctionEnd
+!endif
 
 !macro customInstall
   StrCmp $OpenChamberCleanUpgradeChoice ${BST_CHECKED} 0 done
