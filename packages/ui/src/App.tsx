@@ -56,6 +56,13 @@ import { SyncAppEffects } from '@/apps/AppEffects';
 import { useAppFontEffects } from '@/apps/useAppFontEffects';
 import { resetStreamingState } from '@/sync/streaming';
 import { OpenCodeUpdateToast } from '@/components/update/OpenCodeUpdateToast';
+import {
+  getEmbeddedChatViewOptions,
+  normalizeEmbeddedDirectory,
+  readEmbeddedSessionChatConfig,
+  resolveEmbeddedSyncDirectory,
+  type EmbeddedSessionChatConfig,
+} from '@/lib/embeddedSessionChat';
 
 // Lazy-loaded heavy views — loaded on demand to reduce initial bundle size.
 const OnboardingScreen = lazyWithChunkRecovery(() =>
@@ -98,47 +105,8 @@ type AppProps = {
   apis: RuntimeAPIs;
 };
 
-type EmbeddedSessionChatConfig = {
-  sessionId: string;
-  directory: string | null;
-  readOnly: boolean;
-};
-
 type EmbeddedVisibilityPayload = {
   visible?: unknown;
-};
-
-const normalizeEmbeddedDirectory = (value: string | null | undefined): string => {
-  if (!value) return '';
-  return value.replace(/\\/g, '/').replace(/\/+$/g, '');
-};
-
-const readEmbeddedSessionChatConfig = (): EmbeddedSessionChatConfig | null => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('ocPanel') !== 'session-chat') {
-    return null;
-  }
-
-  const sessionIdRaw = params.get('sessionId');
-  const sessionId = typeof sessionIdRaw === 'string' ? sessionIdRaw.trim() : '';
-  if (!sessionId) {
-    return null;
-  }
-
-  const directoryRaw = params.get('directory');
-  const directory = typeof directoryRaw === 'string' && directoryRaw.trim().length > 0
-    ? directoryRaw.trim()
-    : null;
-
-  return {
-    sessionId,
-    directory,
-    readOnly: params.get('readOnly') === '1' || params.get('readOnly') === 'true',
-  };
 };
 
 const isMcpOAuthCallbackPath = (): boolean => {
@@ -194,7 +162,7 @@ const EmbeddedSessionChatContent: React.FC<{
     <>
       <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
       <OpenCodeUpdateToast />
-      <ChatView readOnly={embeddedSessionChat.readOnly} />
+      <ChatView {...getEmbeddedChatViewOptions(embeddedSessionChat)} />
       <Toaster />
     </>
   );
@@ -837,9 +805,10 @@ function App({ apis }: AppProps) {
   }
 
   if (embeddedSessionChat) {
+    const embeddedSyncDirectory = resolveEmbeddedSyncDirectory(embeddedSessionChat, currentDirectory);
     return (
       <ErrorBoundary>
-        <SyncProvider key={runtimeEndpointEpoch} sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
+        <SyncProvider key={runtimeEndpointEpoch} sdk={opencodeClient.getSdkClient()} directory={embeddedSyncDirectory}>
           <RuntimeAPIProvider apis={apis}>
             <TooltipProvider delayDuration={300} skipDelayDuration={150}>
               <div className="h-full text-foreground bg-background">

@@ -59,6 +59,7 @@ import { openDesktopFileInApp, openDesktopPath } from '@/lib/desktop';
 import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
 import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { useI18n } from '@/lib/i18n';
+import { normalizeFilesViewTargetPath, resolveFilesViewEffectiveSelectedPath } from './filesViewSelection';
 
 type FileNode = {
   name: string;
@@ -638,9 +639,10 @@ const Dialogs: React.FC<DialogsProps> = ({
 
 interface FilesViewProps {
   mode?: 'full' | 'editor-only';
+  targetPath?: string | null;
 }
 
-export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
+export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath = null }) => {
   const { t } = useI18n();
   const { files, runtime } = useRuntimeAPIs();
   const { currentTheme, availableThemes, lightThemeId, darkThemeId } = useThemeSystem();
@@ -742,7 +744,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   }, []);
 
   const openFiles = React.useMemo(() => openPaths.map(toFileNode), [openPaths, toFileNode]);
-  const effectiveSelectedPath = React.useMemo(() => selectedPath ?? openPaths[0] ?? null, [openPaths, selectedPath]);
+  const normalizedTargetPath = React.useMemo(() => normalizeFilesViewTargetPath(targetPath), [targetPath]);
+  const effectiveSelectedPath = React.useMemo(
+    () => resolveFilesViewEffectiveSelectedPath({ targetPath: normalizedTargetPath, selectedPath, openPaths }),
+    [normalizedTargetPath, openPaths, selectedPath],
+  );
   const selectedFile = React.useMemo(() => (effectiveSelectedPath ? toFileNode(effectiveSelectedPath) : null), [effectiveSelectedPath, toFileNode]);
   const selectedFilePath = selectedFile?.path ?? '';
   const selectedFileIsOutsideWorkspace = Boolean(root && selectedFilePath && !isPathWithinRoot(selectedFilePath, root));
@@ -1623,7 +1629,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     const isCurrentLoad = () => {
       if (!root) return false;
       const rootState = useFilesViewTabsStore.getState().byRoot[root];
-      const currentPath = rootState?.selectedPath ?? rootState?.openPaths[0] ?? null;
+      const currentPath = normalizedTargetPath || rootState?.selectedPath || rootState?.openPaths[0] || null;
       return activeFileLoadIdRef.current === loadId && currentPath === node.path;
     };
 
@@ -1737,7 +1743,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           setFileLoading(false);
         }
       });
-  }, [expandPaths, isMobile, loadDirectory, mode, readFile, readFileStat, removeOpenPathsByPrefix, root, runtime.isDesktop, searchQuery, setSelectedPath, t]);
+  }, [expandPaths, isMobile, loadDirectory, mode, normalizedTargetPath, readFile, readFileStat, removeOpenPathsByPrefix, root, runtime.isDesktop, searchQuery, setSelectedPath, t]);
 
   const ensurePathVisible = React.useCallback(async (targetPath: string, includeTarget: boolean) => {
     if (!root) {
