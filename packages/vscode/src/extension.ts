@@ -693,57 +693,6 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Terminal link provider: opens file paths outside the active workspace.
-  class FileTerminalLink implements vscode.TerminalLink {
-    readonly startIndex: number;
-    readonly length: number;
-    readonly tooltip: string;
-    readonly filePath: string;
-    readonly line: number | undefined;
-    readonly col: number | undefined;
-
-    constructor(startIndex: number, length: number, filePath: string, line?: number, col?: number) {
-      this.startIndex = startIndex;
-      this.length = length;
-      this.filePath = filePath;
-      this.line = line;
-      this.col = col;
-      this.tooltip = `Open ${filePath}${line ? `:${line}` : ''}`;
-    }
-  }
-
-  const terminalLinkRegex = /([A-Za-z]:\\(?:[^\\\s:"]+\\)*[^\\\s:"]+)(?::(\d+)(?::(\d+))?)?/g;
-  context.subscriptions.push(
-    vscode.window.registerTerminalLinkProvider({
-      provideTerminalLinks(context) {
-        const results: vscode.TerminalLink[] = [];
-        for (const match of context.line.matchAll(terminalLinkRegex)) {
-          const fullMatch = match[0];
-          const filePath = match[1];
-          const line = match[2] ? parseInt(match[2], 10) : undefined;
-          const col = match[3] ? parseInt(match[3], 10) : undefined;
-          results.push(new FileTerminalLink(match.index, fullMatch.length, filePath, line, col));
-        }
-        return results;
-      },
-      handleTerminalLink(link) {
-        const fl = link as FileTerminalLink;
-        const uri = vscode.Uri.file(fl.filePath);
-        const onError = () => vscode.window.showErrorMessage(`OpenChamber: Cannot open file - ${fl.filePath}`);
-        if (typeof fl.line === 'number') {
-          const pos = new vscode.Position(Math.max(0, fl.line - 1), fl.col || 0);
-          vscode.workspace.openTextDocument(uri).then((doc) => {
-            vscode.window.showTextDocument(doc, { selection: new vscode.Range(pos, pos) });
-          }, onError);
-        } else {
-          vscode.workspace.openTextDocument(uri).then((doc) => {
-            vscode.window.showTextDocument(doc);
-          }, onError);
-        }
-      },
-    })
-  );
-
   // Start OpenCode API without blocking activation.
   // Blocking here delays webview resolution and causes a blank panel until startup completes.
   void openCodeManager.start();

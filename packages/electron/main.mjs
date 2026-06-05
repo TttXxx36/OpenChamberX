@@ -2886,6 +2886,12 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         spawn('open', openArgs, { detached: true, stdio: 'ignore' }).unref();
         return null;
       }
+      // Prefer VS Code CLI so the file opens even when outside the workspace.
+      const codeBin = process.platform === 'win32' ? 'code.cmd' : 'code';
+      try {
+        await execFileAsync(codeBin, ['--goto', targetPath], { windowsHide: true });
+        return null;
+      } catch {}
       await shell.openPath(targetPath);
       return null;
     }
