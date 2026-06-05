@@ -1067,7 +1067,7 @@ const TaskToolSummary: React.FC<{
     sessionDirectory?: string | null;
 }> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input, animateTailText = true, isActive = false, sessionDirectory }) => {
     const { t } = useI18n();
-    const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+    const currentDirectory = useDirectoryStore((state) => resolveSubtaskPanelDirectory(sessionDirectory, state.currentDirectory));
     const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
     const displayEntries = entries;
@@ -1208,7 +1208,7 @@ const TaskToolSummary: React.FC<{
                     {isOutputExpanded ? (
                         <ToolScrollableSection maxHeightClass="max-h-[50vh]">
                             <div className="w-full min-w-0">
-                                <SimpleMarkdownRenderer content={trimmedOutput} variant="tool" onShowPopup={onShowPopup} />
+                                <SimpleMarkdownRenderer content={trimmedOutput} variant="tool" onShowPopup={onShowPopup} referenceDirectory={currentDirectory} />
                             </div>
                         </ToolScrollableSection>
                     ) : null}
@@ -1626,7 +1626,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (part.tool === 'task' && hasStringOutput) {
             return renderScrollableBlock(
                 <div className="w-full min-w-0">
-                    <SimpleMarkdownRenderer content={outputString} variant="tool" onShowPopup={onShowPopup} />
+                    <SimpleMarkdownRenderer content={outputString} variant="tool" onShowPopup={onShowPopup} referenceDirectory={currentDirectory} />
                 </div>
             );
         }
@@ -1780,7 +1780,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
 }) => {
     const state = part.state;
     const showToolFileIcons = useUIStore((s) => s.showToolFileIcons);
-    const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
+    const currentDirectory = useDirectoryStore((s) => resolveSubtaskPanelDirectory(sessionDirectory, s.currentDirectory));
     const taskPanelDirectory = resolveSubtaskPanelDirectory(sessionDirectory, currentDirectory);
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
 
@@ -2766,5 +2766,6 @@ export default React.memo(ToolPart, (prev, next) => {
         && prev.alwaysShowActions === next.alwaysShowActions
         && prev.onContentChange === next.onContentChange
         && prev.onShowPopup === next.onShowPopup
-        && prev.animateTailText === next.animateTailText;
+        && prev.animateTailText === next.animateTailText
+        && prev.sessionDirectory === next.sessionDirectory;
 });

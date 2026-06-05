@@ -43,10 +43,11 @@ import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
 import { createProjectPlanFile } from '@/lib/openchamberConfig';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
-import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useI18n } from '@/lib/i18n';
 import { extractLoopbackUrls } from '@/lib/url';
 import { navigateToSubtaskSession } from './subtaskNavigation';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { resolveMessageReferenceDirectory } from './messageDirectory';
 
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
@@ -94,7 +95,7 @@ const normalizeSubtaskModel = (model: SubtaskPartLike['model']): string | null =
 
 const UserSubtaskPart: React.FC<{ part: SubtaskPartLike; sessionDirectory?: string | null }> = ({ part, sessionDirectory }) => {
     const [expanded, setExpanded] = React.useState(false);
-    const effectiveDirectory = useEffectiveDirectory();
+    const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
     const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
     const { t } = useI18n();
 
@@ -158,7 +159,7 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike; sessionDirectory?: stri
                             navigateToSubtaskSession({
                                 sessionId: taskSessionID,
                                 sessionDirectory,
-                                currentDirectory: effectiveDirectory,
+                                currentDirectory: fallbackDirectory,
                                 setCurrentSession,
                             });
                         }}
@@ -354,12 +355,13 @@ const UserMessageBody = React.memo(({ sessionId, messageId, parts, isMobile, alw
     const { t } = useI18n();
     const chatSurfaceMode = useChatSurfaceMode();
     const getDirectoryForSession = useSessionUIStore((state) => state.getDirectoryForSession);
-    const effectiveDirectory = useEffectiveDirectory();
+    const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
     const sessionDirectory = React.useMemo(() => {
-        return (sessionId ? getDirectoryForSession(sessionId) : null)
-            ?? effectiveDirectory
-            ?? '';
-    }, [effectiveDirectory, getDirectoryForSession, sessionId]);
+        return resolveMessageReferenceDirectory(
+            sessionId ? getDirectoryForSession(sessionId) : null,
+            fallbackDirectory,
+        );
+    }, [fallbackDirectory, getDirectoryForSession, sessionId]);
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
 
@@ -588,6 +590,7 @@ const UserMessageBody = React.memo(({ sessionId, messageId, parts, isMobile, alw
                                 messageId={messageId}
                                 isMobile={isMobile}
                                 agentMention={mentionForPart}
+                                referenceDirectory={sessionDirectory}
                             />
                         </React.Fragment>
                     );
@@ -1029,12 +1032,19 @@ const AssistantMessageBody = React.memo(({
     const getDirectoryForSession = useSessionUIStore((state) => state.getDirectoryForSession);
     const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
     const projects = useProjectsStore((state) => state.projects);
-    const effectiveDirectory = useEffectiveDirectory();
+    const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
+    const activeSessionDirectory = React.useMemo(() => {
+        return resolveMessageReferenceDirectory(
+            currentSessionId ? getDirectoryForSession(currentSessionId) : null,
+            fallbackDirectory,
+        );
+    }, [currentSessionId, fallbackDirectory, getDirectoryForSession]);
     const referenceDirectory = React.useMemo(() => {
-        return (sessionId ? getDirectoryForSession(sessionId) : null)
-            ?? effectiveDirectory
-            ?? '';
-    }, [effectiveDirectory, getDirectoryForSession, sessionId]);
+        return resolveMessageReferenceDirectory(
+            sessionId ? getDirectoryForSession(sessionId) : null,
+            fallbackDirectory,
+        );
+    }, [fallbackDirectory, getDirectoryForSession, sessionId]);
     const [isPlanDialogOpen, setIsPlanDialogOpen] = React.useState(false);
     const [isSavingPlan, setIsSavingPlan] = React.useState(false);
     const [isForkDialogOpen, setIsForkDialogOpen] = React.useState(false);
@@ -1056,12 +1066,9 @@ const AssistantMessageBody = React.memo(({
             return null;
         }
 
-        const directory = effectiveDirectory
-            ?? (currentSessionId ? getDirectoryForSession(currentSessionId) : null)
-            ?? '';
-        const resolved = resolveProjectForSessionDirectory(projects, availableWorktreesByProject, directory);
+        const resolved = resolveProjectForSessionDirectory(projects, availableWorktreesByProject, activeSessionDirectory);
         return resolved ? { id: resolved.id, path: resolved.path } : null;
-    }, [availableWorktreesByProject, canUseProjectPlanActions, currentSessionId, effectiveDirectory, getDirectoryForSession, projects]);
+    }, [activeSessionDirectory, availableWorktreesByProject, canUseProjectPlanActions, projects]);
 
     const hasTools = toolParts.length > 0;
 
@@ -1532,6 +1539,7 @@ const AssistantMessageBody = React.memo(({
                             animatedToolIds={animatedToolIdsLookup}
                             diffStats={turnGroupingContext.diffStats}
                             renderJustificationActions={renderJustificationActions}
+                            sessionDirectory={referenceDirectory}
                         />
                     </div>
                 );
@@ -1706,6 +1714,7 @@ const AssistantMessageBody = React.memo(({
                                     },
                                 ]}
                                 animateTailText={animatedToolIdsLookup.has(toolPart.id)}
+                                sessionDirectory={referenceDirectory}
                             />
                         </ToolRevealOnMount>
                     </FadeInOnReveal>
@@ -1788,12 +1797,10 @@ const AssistantMessageBody = React.memo(({
                             aria-label={t('chat.messageBody.actions.openPreviewAria')}
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={() => {
-                                const directory = effectiveDirectory
-                                    ?? (currentSessionId ? getDirectoryForSession(currentSessionId) : null);
-                                if (!directory) {
+                                if (!referenceDirectory) {
                                     return;
                                 }
-                                openContextPreview(directory, messagePreviewUrl);
+                                openContextPreview(referenceDirectory, messagePreviewUrl);
                             }}
                         >
                             <Icon name="global" className="h-4 w-4" />
@@ -1880,10 +1887,10 @@ const AssistantMessageBody = React.memo(({
                  />
              ) : null}
              {isForkDialogOpen ? (
-                 <ForkSessionDialog
-                     open={isForkDialogOpen}
-                     onOpenChange={setIsForkDialogOpen}
-                     projectDirectory={effectiveDirectory ?? null}
+                  <ForkSessionDialog
+                      open={isForkDialogOpen}
+                      onOpenChange={setIsForkDialogOpen}
+                      projectDirectory={activeSessionDirectory || null}
                      submitting={isForkSubmitting}
                      onConfirm={handleConfirmFork}
                  />
@@ -1910,6 +1917,7 @@ const AssistantMessageBody = React.memo(({
                                         <SimpleMarkdownRenderer
                                             content={errorMessage ?? ''}
                                             onShowPopup={onShowPopup}
+                                            referenceDirectory={referenceDirectory}
                                             className="[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0"
                                         />
                                     </div>

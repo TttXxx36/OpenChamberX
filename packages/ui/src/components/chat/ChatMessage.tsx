@@ -1024,8 +1024,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                             }}
                                             className="px-5 py-3 shadow-none border border-primary/5"
                                         >
-                                            <MessageBody
-                                                messageId={message.info.id}
+                                             <MessageBody
+                                                 sessionId={message.info.sessionID}
+                                                 messageId={message.info.id}
                                                 parts={displayParts}
                                                 isUser={isUser}
                                                 isMessageCompleted={isMessageCompleted}
@@ -1058,8 +1059,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                             />
                                         </div>
                                         {useExternalUserActionsRow ? (
-                                            <MessageBody
-                                                messageId={message.info.id}
+                                             <MessageBody
+                                                 sessionId={message.info.sessionID}
+                                                 messageId={message.info.id}
                                                 parts={displayParts}
                                                 isUser={isUser}
                                                 isMessageCompleted={isMessageCompleted}

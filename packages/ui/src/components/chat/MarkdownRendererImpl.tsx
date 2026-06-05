@@ -25,7 +25,7 @@ import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import type { ToolPopupContent } from './message/types';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
-import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { EditorAPI } from '@/lib/api/types';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -35,6 +35,7 @@ import {
   getFileReferenceContextDirectory,
   resolveFileReferencePath,
 } from './MarkdownRenderer.fileRefs';
+import { resolveMessageReferenceDirectory } from './message/messageDirectory';
 
 const useCurrentMermaidTheme = () => {
   const themeSystem = useOptionalThemeSystem();
@@ -769,11 +770,22 @@ const downloadTextFile = (content: string, filename: string, mimeType: string) =
   }
 };
 
+type MarkdownCodeBlockLabels = {
+  showCode: string;
+  preview: string;
+  previewHtml: string;
+  downloadHtml: string;
+  copied: string;
+  copyCode: string;
+  htmlPreviewTitle: string;
+};
+
 const MarkdownCodeBlock: React.FC<{
   code: string;
   language: string;
   syntaxTheme: { [key: string]: React.CSSProperties };
-}> = ({ code, language, syntaxTheme }) => {
+  labels: MarkdownCodeBlockLabels;
+}> = ({ code, language, syntaxTheme, labels }) => {
   const [copied, setCopied] = React.useState(false);
   const [highlight, setHighlight] = React.useState(true);
   const [viewMode, setViewMode] = React.useState<'code' | 'preview'>('code');
@@ -840,9 +852,9 @@ const MarkdownCodeBlock: React.FC<{
               type="button"
               onClick={() => setViewMode((mode) => (mode === 'preview' ? 'code' : 'preview'))}
               className="p-1 rounded hover:bg-interactive-hover/60 text-muted-foreground hover:text-foreground transition-colors"
-              title={viewMode === 'preview' ? 'Show code' : 'Preview'}
+              title={viewMode === 'preview' ? labels.showCode : labels.preview}
               aria-pressed={viewMode === 'preview'}
-              aria-label={viewMode === 'preview' ? 'Show code' : 'Preview HTML'}
+              aria-label={viewMode === 'preview' ? labels.showCode : labels.previewHtml}
             >
               {viewMode === 'preview' ? <Icon name="code" className="size-3.5" /> : <Icon name="eye" className="size-3.5" />}
             </button>
@@ -852,8 +864,8 @@ const MarkdownCodeBlock: React.FC<{
               type="button"
               onClick={handleDownload}
               className="p-1 rounded hover:bg-interactive-hover/60 text-muted-foreground hover:text-foreground transition-colors"
-              title="Download HTML"
-              aria-label="Download HTML"
+              title={labels.downloadHtml}
+              aria-label={labels.downloadHtml}
             >
               <Icon name="download" className="size-3.5" />
             </button>
@@ -862,8 +874,8 @@ const MarkdownCodeBlock: React.FC<{
             type="button"
             onClick={() => { void handleCopy(); }}
             className="p-1 rounded hover:bg-interactive-hover/60 text-muted-foreground hover:text-foreground transition-colors"
-            title={copied ? 'Copied' : 'Copy code'}
-            aria-label={copied ? 'Copied' : 'Copy code'}
+            title={copied ? labels.copied : labels.copyCode}
+            aria-label={copied ? labels.copied : labels.copyCode}
           >
             {copied ? <Icon name="check" className="size-3.5" /> : <Icon name="file-copy" className="size-3.5" />}
           </button>
@@ -873,7 +885,7 @@ const MarkdownCodeBlock: React.FC<{
         <div className="h-[320px] md:h-[420px] bg-background">
           <iframe
             srcDoc={code}
-            title="HTML preview"
+            title={labels.htmlPreviewTitle}
             className="h-full w-full border-0"
             sandbox="allow-scripts allow-forms"
           />
@@ -906,11 +918,15 @@ const buildMarkdownComponents = ({
   onPreviewLoopback,
   previewLabel,
   previewTitle,
+  codeBlockLabels,
+  openPreviewPaneLabel,
 }: {
   syntaxTheme: { [key: string]: React.CSSProperties };
   onPreviewLoopback?: (url: string) => void;
   previewLabel?: string;
   previewTitle?: string;
+  codeBlockLabels: MarkdownCodeBlockLabels;
+  openPreviewPaneLabel: string;
 }): Components => ({
   table({ children, ...props }) {
     return <TableWrapper className={props.className}>{children}</TableWrapper>;
@@ -971,7 +987,7 @@ const buildMarkdownComponents = ({
     if (language === 'mermaid') {
       return <MermaidBlock source={code} mode={useUIStore.getState().mermaidRenderingMode} />;
     }
-    return <MarkdownCodeBlock code={code} language={language} syntaxTheme={syntaxTheme} {...props} />;
+    return <MarkdownCodeBlock code={code} language={language} syntaxTheme={syntaxTheme} labels={codeBlockLabels} {...props} />;
   },
   code({ className, children, ...props }) {
     return (
@@ -1008,12 +1024,12 @@ const buildMarkdownComponents = ({
               onPreviewLoopback(targetHref);
             }}
             className="ml-1 inline-flex h-5 items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--surface-background)] px-1.5 align-middle text-[11px] leading-none text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
-            aria-label={previewTitle ?? previewLabel ?? 'Open preview pane'}
-            title={previewTitle ?? previewLabel ?? 'Open preview pane'}
+            aria-label={previewTitle ?? previewLabel ?? openPreviewPaneLabel}
+            title={previewTitle ?? previewLabel ?? openPreviewPaneLabel}
             data-loopback-preview-trigger="true"
           >
             <Icon name="eye" className="size-3"  aria-hidden="true"/>
-            <span className="font-medium">{previewLabel ?? 'Preview'}</span>
+            <span className="font-medium">{previewLabel}</span>
           </button>
         ) : null}
       </>
@@ -1335,6 +1351,7 @@ const useFileReferenceInteractions = ({
   editor,
   preferRuntimeEditor,
   enabled,
+  fileLinkTitle,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   effectiveDirectory: string;
@@ -1342,6 +1359,7 @@ const useFileReferenceInteractions = ({
   editor?: EditorAPI;
   preferRuntimeEditor?: boolean;
   enabled: boolean;
+  fileLinkTitle: string;
 }) => {
   const annotationDebounceRef = React.useRef<number | null>(null);
 
@@ -1354,10 +1372,11 @@ const useFileReferenceInteractions = ({
     const fileReferenceLinkLimit = getFileReferenceLinkLimit();
 
     const clearFileLinkAttributes = (candidate: HTMLElement) => {
+      const wasAnnotatedFileLink = candidate.getAttribute('data-openchamber-file-link') === 'true';
       candidate.removeAttribute('data-openchamber-file-link');
       candidate.removeAttribute('data-openchamber-file-ref');
       candidate.removeAttribute('data-openchamber-file-path');
-      if (candidate.getAttribute('title') === 'Open file') {
+      if (wasAnnotatedFileLink || candidate.getAttribute('title') === fileLinkTitle) {
         candidate.removeAttribute('title');
       }
       if (candidate.tagName.toLowerCase() !== 'a') {
@@ -1412,7 +1431,7 @@ const useFileReferenceInteractions = ({
           candidate.setAttribute('data-openchamber-file-link', 'true');
           candidate.setAttribute('data-openchamber-file-ref', latestRawCandidate);
           candidate.setAttribute('data-openchamber-file-path', latestResolved.resolvedPath);
-          candidate.setAttribute('title', 'Open file');
+          candidate.setAttribute('title', fileLinkTitle);
           if (candidate.tagName.toLowerCase() !== 'a') {
             candidate.setAttribute('role', 'button');
             candidate.setAttribute('tabindex', '0');
@@ -1546,7 +1565,7 @@ const useFileReferenceInteractions = ({
       container.removeEventListener('click', handleClick);
       container.removeEventListener('keydown', handleKeyDown);
     };
-  }, [containerRef, editor, effectiveDirectory, referenceDirectory, preferRuntimeEditor, enabled]);
+  }, [containerRef, editor, effectiveDirectory, referenceDirectory, preferRuntimeEditor, enabled, fileLinkTitle]);
 };
 
 const useMermaidInlineInteractions = ({
@@ -1658,8 +1677,19 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
 }) => {
   const currentTheme = useCurrentMermaidTheme();
   const { editor, runtime } = useRuntimeAPIs();
+  const { t } = useI18n();
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const effectiveDirectory = useEffectiveDirectory() ?? '';
+  const effectiveDirectory = useDirectoryStore((state) => resolveMessageReferenceDirectory(referenceDirectory, state.currentDirectory));
+  const codeBlockLabels = React.useMemo(() => ({
+    showCode: t('markdownRenderer.code.actions.showCode'),
+    preview: t('markdownRenderer.code.actions.preview'),
+    previewHtml: t('markdownRenderer.code.actions.previewHtml'),
+    downloadHtml: t('markdownRenderer.code.actions.downloadHtml'),
+    copied: t('markdownRenderer.code.actions.copied'),
+    copyCode: t('markdownRenderer.code.actions.copyCode'),
+    htmlPreviewTitle: t('markdownRenderer.code.htmlPreviewTitle'),
+  }), [t]);
+  const fileLinkTitle = t('markdownRenderer.file.openTitle');
   const mermaidBlocks = React.useMemo(() => extractMermaidBlocks(content), [content]);
   useMermaidInlineInteractions({ containerRef, mermaidBlocks, onShowPopup });
   useFileReferenceInteractions({
@@ -1669,10 +1699,10 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
     editor,
     preferRuntimeEditor: runtime.isVSCode,
     enabled: enableFileReferences && !isStreaming,
+    fileLinkTitle,
   });
   useExternalLinkInteractions({ containerRef });
   const openContextPreview = useUIStore((state) => state.openContextPreview);
-  const { t } = useI18n();
   const handlePreviewLoopback = React.useCallback((url: string) => {
     if (!effectiveDirectory) return;
     openContextPreview(effectiveDirectory, url);
@@ -1686,8 +1716,10 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
       onPreviewLoopback: effectiveDirectory ? handlePreviewLoopback : undefined,
       previewLabel,
       previewTitle,
+      codeBlockLabels,
+      openPreviewPaneLabel: previewTitle,
     }),
-    [syntaxTheme, effectiveDirectory, handlePreviewLoopback, previewLabel, previewTitle],
+    [syntaxTheme, effectiveDirectory, handlePreviewLoopback, previewLabel, previewTitle, codeBlockLabels],
   );
   const componentKey = `markdown-${part?.id ? `part-${part.id}` : `message-${messageId}`}`;
   const markdownBlocks = useStableMarkdownBlocks(content, isStreaming && !disableStreamAnimation, componentKey);
@@ -1727,6 +1759,7 @@ export const MarkdownRenderer = React.memo(MarkdownRendererImpl, (prev, next) =>
     && prev.isAnimated === next.isAnimated
     && prev.skipFadeIn === next.skipFadeIn
     && prev.className === next.className
+    && prev.enableFileReferences === next.enableFileReferences
     && prev.messageId === next.messageId
     && prev.referenceDirectory === next.referenceDirectory
     && prev.onShowPopup === next.onShowPopup
@@ -1756,13 +1789,24 @@ const SimpleMarkdownRendererImpl: React.FC<{
   referenceDirectory,
 }) => {
   const { editor, runtime } = useRuntimeAPIs();
+  const { t } = useI18n();
   const renderedContent = React.useMemo(
     () => (stripFrontmatter ? stripLeadingFrontmatter(content) : content),
     [content, stripFrontmatter],
   );
   const currentTheme = useCurrentMermaidTheme();
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const effectiveDirectory = useEffectiveDirectory() ?? '';
+  const effectiveDirectory = useDirectoryStore((state) => resolveMessageReferenceDirectory(referenceDirectory, state.currentDirectory));
+  const codeBlockLabels = React.useMemo(() => ({
+    showCode: t('markdownRenderer.code.actions.showCode'),
+    preview: t('markdownRenderer.code.actions.preview'),
+    previewHtml: t('markdownRenderer.code.actions.previewHtml'),
+    downloadHtml: t('markdownRenderer.code.actions.downloadHtml'),
+    copied: t('markdownRenderer.code.actions.copied'),
+    copyCode: t('markdownRenderer.code.actions.copyCode'),
+    htmlPreviewTitle: t('markdownRenderer.code.htmlPreviewTitle'),
+  }), [t]);
+  const fileLinkTitle = t('markdownRenderer.file.openTitle');
   const mermaidBlocks = React.useMemo(() => extractMermaidBlocks(renderedContent), [renderedContent]);
   useMermaidInlineInteractions({
     containerRef,
@@ -1777,10 +1821,15 @@ const SimpleMarkdownRendererImpl: React.FC<{
     editor,
     preferRuntimeEditor: runtime.isVSCode,
     enabled: enableFileReferences,
+    fileLinkTitle,
   });
   useExternalLinkInteractions({ containerRef, enabled: !disableLinkSafety });
   const syntaxTheme = React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
-  const markdownComponents = React.useMemo(() => buildMarkdownComponents({ syntaxTheme }), [syntaxTheme]);
+  const markdownComponents = React.useMemo(() => buildMarkdownComponents({
+    syntaxTheme,
+    codeBlockLabels,
+    openPreviewPaneLabel: t('terminalView.preview.openTitle'),
+  }), [codeBlockLabels, syntaxTheme, t]);
   const markdownBlocks = useStableMarkdownBlocks(renderedContent, false, `simple:${variant}`);
 
   const markdownClassName = variant === 'tool'

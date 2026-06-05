@@ -6,7 +6,7 @@ import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { Icon } from "@/components/icon/Icon";
-import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 type PartWithText = Part & { text?: string; content?: string; value?: string };
 
@@ -15,6 +15,7 @@ type UserTextPartProps = {
     messageId: string;
     isMobile: boolean;
     agentMention?: AgentMentionInfo;
+    referenceDirectory?: string | null;
 };
 
 const buildMentionUrl = (name: string): string => {
@@ -59,7 +60,7 @@ const applyHardLineBreaks = (markdown: string): string => {
         .join('');
 };
 
-const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMention }) => {
+const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMention, referenceDirectory }) => {
     const partWithText = part as PartWithText;
     const rawText = partWithText.text;
     const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
@@ -69,7 +70,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
     const userMessageRenderingMode = useUIStore((state) => state.userMessageRenderingMode);
     const skills = useSkillsStore((state) => state.skills);
     const openContextFile = useUIStore((state) => state.openContextFile);
-    const effectiveDirectory = useEffectiveDirectory();
+    const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
     const normalizedRenderingMode = normalizeUserMessageRenderingMode(userMessageRenderingMode);
     const textRef = React.useRef<HTMLDivElement>(null);
     const skillByName = React.useMemo(() => new Map(skills.map((skill) => [skill.name, skill])), [skills]);
@@ -77,8 +78,8 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
     const openSkill = React.useCallback((name: string) => {
         const skill = skillByName.get(name);
         if (!skill?.path) return;
-        openContextFile(effectiveDirectory || skill.path.replace(/\/[^/]*$/, '') || '/', skill.path);
-    }, [effectiveDirectory, openContextFile, skillByName]);
+        openContextFile(referenceDirectory || currentDirectory || skill.path.replace(/\/[^/]*$/, '') || '/', skill.path);
+    }, [currentDirectory, openContextFile, referenceDirectory, skillByName]);
 
     const hasActiveSelectionInElement = React.useCallback((element: HTMLElement): boolean => {
         if (typeof window === 'undefined') {
@@ -257,6 +258,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
                     <SimpleMarkdownRenderer
                         content={processedMarkdownContent}
                         className="[&_.markdown-content>*:first-child]:mt-0 [&_.markdown-content>*:last-child]:mb-0"
+                        referenceDirectory={referenceDirectory}
                         disableLinkSafety 
                     />
                 ) : (

@@ -24,6 +24,7 @@ import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
+import { getMobileDrawerTargetX, normalizeMobileDrawerWidth } from './mobileDrawerSizing';
 
 import { ChatView } from '@/components/views/ChatView';
 import { DiffView } from '@/components/views/DiffView';
@@ -73,6 +74,10 @@ export const MainLayout: React.FC = () => {
     const [mobileRightSidebarOpen, setMobileRightSidebarOpen] = React.useState(false);
     const [mobileLeftDrawerVisible, setMobileLeftDrawerVisible] = React.useState(false);
     const [mobileRightDrawerVisible, setMobileRightDrawerVisible] = React.useState(false);
+    const mobileLeftDrawerOpenRef = React.useRef(mobileLeftDrawerOpen);
+    const mobileRightSidebarOpenRef = React.useRef(mobileRightSidebarOpen);
+    mobileLeftDrawerOpenRef.current = mobileLeftDrawerOpen;
+    mobileRightSidebarOpenRef.current = mobileRightSidebarOpen;
     const setMobileSessionPanelOpen = React.useCallback((open: boolean) => {
         setMobileLeftDrawerOpen(open);
         useUIStore.getState().setSessionSwitcherOpen(open);
@@ -90,10 +95,32 @@ export const MainLayout: React.FC = () => {
     // Compute drawer width
     useEffect(() => {
         if (isMobile) {
-            leftDrawerWidth.current = window.innerWidth;
-            rightDrawerWidth.current = window.innerWidth;
+            const width = normalizeMobileDrawerWidth(window.innerWidth);
+            leftDrawerWidth.current = width;
+            rightDrawerWidth.current = width;
         }
     }, [isMobile]);
+
+    useEffect(() => {
+        if (!isMobile || typeof window === 'undefined') {
+            return;
+        }
+
+        const syncDrawerWidths = () => {
+            const width = normalizeMobileDrawerWidth(window.innerWidth);
+            leftDrawerWidth.current = width;
+            rightDrawerWidth.current = width;
+            leftDrawerX.set(getMobileDrawerTargetX({ side: 'left', width, open: mobileLeftDrawerOpenRef.current }));
+            rightDrawerX.set(getMobileDrawerTargetX({ side: 'right', width, open: mobileRightSidebarOpenRef.current }));
+        };
+
+        syncDrawerWidths();
+        window.addEventListener('resize', syncDrawerWidths);
+
+        return () => {
+            window.removeEventListener('resize', syncDrawerWidths);
+        };
+    }, [isMobile, leftDrawerX, rightDrawerX]);
 
     // Sync left drawer state and motion value
     useEffect(() => {

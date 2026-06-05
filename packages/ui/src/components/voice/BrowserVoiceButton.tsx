@@ -27,15 +27,6 @@ import { toast } from '@/components/ui/toast';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 
-// Status text for accessibility and labels
-const statusLabels: Record<string, string> = {
-    idle: 'Start Voice',
-    listening: 'Listening',
-    processing: 'Processing',
-    speaking: 'AI Speaking',
-    error: 'Voice Error',
-};
-
 // iOS Safari detection utility
 const isIOSSafari = (): boolean => {
     if (typeof navigator === 'undefined') return false;
@@ -43,23 +34,6 @@ const isIOSSafari = (): boolean => {
     const isIOS = /iphone|ipad|ipod/i.test(userAgent);
     const isSafari = /safari/i.test(userAgent) && !/chrome|crios|crmo/i.test(userAgent);
     return isIOS && isSafari;
-};
-
-const normalizeVoiceErrorMessage = (error: string): string => {
-    const isMediaDevicesError =
-        error.includes('getUserMedia') ||
-        error.includes('mediaDevices') ||
-        error.includes('Cannot read properties of undefined');
-
-    if (!isMediaDevicesError) {
-        return error;
-    }
-
-    if (typeof window !== 'undefined' && !window.isSecureContext) {
-        return 'Voice requires a secure connection (HTTPS) or localhost. Please use HTTPS or access via localhost.';
-    }
-
-    return 'Microphone access is unavailable in this runtime. On desktop, check System Settings -> Privacy & Security -> Microphone for OpenChamber.';
 };
 
 /**
@@ -118,6 +92,38 @@ export function BrowserVoiceButton() {
     const canTranscribeOnStop = sttProvider === 'wasm' || (sttProvider === 'server' && sttTranscribeOnStop);
     const isListeningWithTranscribeOnStop = status === 'listening' && canTranscribeOnStop;
 
+    const normalizeVoiceErrorMessage = useCallback((voiceError: string): string => {
+        const isMediaDevicesError =
+            voiceError.includes('getUserMedia') ||
+            voiceError.includes('mediaDevices') ||
+            voiceError.includes('Cannot read properties of undefined');
+
+        if (!isMediaDevicesError) {
+            return voiceError;
+        }
+
+        if (typeof window !== 'undefined' && !window.isSecureContext) {
+            return t('voice.error.secureConnection');
+        }
+
+        return t('voice.error.microphoneUnavailable');
+    }, [t]);
+
+    const getStatusLabel = useCallback((voiceStatus: string): string => {
+        switch (voiceStatus) {
+            case 'listening':
+                return t('voice.status.listening');
+            case 'processing':
+                return t('voice.status.processing');
+            case 'speaking':
+                return t('voice.status.speaking');
+            case 'error':
+                return t('voice.status.error');
+            default:
+                return t('voice.action.start');
+        }
+    }, [t]);
+
     // Show toast notification when voice error occurs
     useEffect(() => {
         if (isError && error) {
@@ -135,16 +141,16 @@ export function BrowserVoiceButton() {
         if (!isError) {
             lastToastedErrorRef.current = null;
         }
-    }, [isError, error]);
+    }, [isError, error, normalizeVoiceErrorMessage]);
 
     // Status text for accessibility
     const statusText = isError
-        ? error || 'Voice Error'
+        ? error || t('voice.status.error')
         : isListeningWithTranscribeOnStop
           ? t('voice.action.finishAndTranscribe')
         : conversationMode && status === 'idle'
-          ? 'Start Voice (Continuous mode on)'
-          : statusLabels[status] || 'Start Voice';
+          ? t('voice.action.startContinuous')
+          : getStatusLabel(status);
 
     // Tooltip content based on state
     const getTooltipContent = () => {
@@ -155,12 +161,12 @@ export function BrowserVoiceButton() {
             return t('voice.action.finishAndTranscribe');
         }
         if (isActive) {
-            return 'Stop voice conversation';
+            return t('voice.tooltip.stopConversation');
         }
         if (isMobile) {
-            return 'Start voice conversation';
+            return t('voice.tooltip.startConversation');
         }
-        return `Start voice conversation (Shift+Click for continuous mode) • Cmd/Ctrl+Shift+V to toggle`;
+        return t('voice.tooltip.startConversationWithShortcut');
     };
 
     // Handle voice activation (used by both click and touch)
@@ -282,12 +288,12 @@ export function BrowserVoiceButton() {
     if (!isSupported) {
         const supportDetails = browserVoiceService.getSupportDetails();
         const tooltipMessage = !supportDetails.secureContext
-            ? 'Voice requires HTTPS or localhost. Please use a secure connection.'
+            ? t('voice.support.secureContext')
             : !supportDetails.recognition
-                ? 'Speech recognition not supported in this browser. Try Chrome, Edge, or Safari.'
+                ? t('voice.support.recognitionUnsupported')
                 : !supportDetails.synthesis
-                    ? 'Speech synthesis not supported in this browser.'
-                    : 'Voice not supported in this browser';
+                    ? t('voice.support.synthesisUnsupported')
+                    : t('voice.support.unsupported');
 
         return (
             <TooltipProvider>
@@ -378,8 +384,8 @@ export function BrowserVoiceButton() {
                     variant="ghost"
                     onPointerDownCapture={(event) => event.stopPropagation()}
                     onClick={handleToggleConversationMode}
-                    aria-label={conversationMode ? 'Continuous mode on' : 'Continuous mode off'}
-                    title={conversationMode ? 'Continuous mode on' : 'Continuous mode off'}
+                    aria-label={conversationMode ? t('voice.conversationMode.on') : t('voice.conversationMode.off')}
+                    title={conversationMode ? t('voice.conversationMode.on') : t('voice.conversationMode.off')}
                     className={
                         `${buttonSizeClass} p-0 ${clearHoverBackgroundClass} ${conversationMode ? 'text-[var(--status-info)] hover:text-[var(--status-info)]' : 'text-muted-foreground hover:text-foreground'}`
                     }

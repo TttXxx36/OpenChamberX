@@ -223,88 +223,101 @@ export function useTabletStandalonePwaRuntime(): boolean {
   return value;
 }
 
+const DEFAULT_DEVICE_INFO: DeviceInfo = {
+  isMobile: false,
+  isTablet: false,
+  isDesktop: true,
+  deviceType: 'desktop',
+  screenWidth: 1024,
+  breakpoint: 'lg',
+  hasTouchInput: false,
+  hasTouchOnlyPointer: false,
+};
+
+let currentDeviceInfo: DeviceInfo | null = null;
+let unsubscribeBrowserDeviceInfo: (() => void) | null = null;
+const deviceInfoListeners = new Set<() => void>();
+
+export function getDeviceInfoSnapshot(): DeviceInfo {
+  if (typeof window === 'undefined') {
+    return DEFAULT_DEVICE_INFO;
+  }
+  if (!currentDeviceInfo) {
+    currentDeviceInfo = getDeviceInfo();
+  }
+  return currentDeviceInfo;
+}
+
+const publishDeviceInfoSnapshot = () => {
+  if (typeof window === 'undefined') {
+    currentDeviceInfo = DEFAULT_DEVICE_INFO;
+  } else {
+    currentDeviceInfo = getDeviceInfo();
+  }
+  deviceInfoListeners.forEach((listener) => listener());
+};
+
+const addMediaQueryListener = (query: MediaQueryList | null, listener: () => void): (() => void) => {
+  if (!query) {
+    return () => {};
+  }
+  if (typeof query.addEventListener === 'function') {
+    query.addEventListener('change', listener);
+    return () => query.removeEventListener('change', listener);
+  }
+  if (typeof query.addListener === 'function') {
+    query.addListener(listener);
+    return () => query.removeListener(listener);
+  }
+  return () => {};
+};
+
+const subscribeBrowserDeviceInfo = () => {
+  if (typeof window === 'undefined') {
+    return () => {};
+  }
+
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  const supportsMatchMedia = typeof window.matchMedia === 'function';
+  const pointerQuery = supportsMatchMedia ? window.matchMedia('(pointer: coarse)') : null;
+  const hoverQuery = supportsMatchMedia ? window.matchMedia('(hover: none)') : null;
+  const handleResize = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(publishDeviceInfoSnapshot, 150);
+  };
+  const handlePointerChange = () => {
+    publishDeviceInfoSnapshot();
+  };
+  const cleanupPointerQuery = addMediaQueryListener(pointerQuery, handlePointerChange);
+  const cleanupHoverQuery = addMediaQueryListener(hoverQuery, handlePointerChange);
+
+  currentDeviceInfo = getDeviceInfo();
+  window.addEventListener('resize', handleResize);
+
+  return () => {
+    clearTimeout(debounceTimer);
+    window.removeEventListener('resize', handleResize);
+    cleanupPointerQuery();
+    cleanupHoverQuery();
+    currentDeviceInfo = null;
+  };
+};
+
+export function subscribeDeviceInfo(listener: () => void): () => void {
+  deviceInfoListeners.add(listener);
+  if (deviceInfoListeners.size === 1) {
+    unsubscribeBrowserDeviceInfo = subscribeBrowserDeviceInfo();
+  }
+
+  return () => {
+    deviceInfoListeners.delete(listener);
+    if (deviceInfoListeners.size === 0) {
+      unsubscribeBrowserDeviceInfo?.();
+      unsubscribeBrowserDeviceInfo = null;
+    }
+  };
+}
+
 export function useDeviceInfo(): DeviceInfo {
-  const [deviceInfo, setDeviceInfo] = React.useState<DeviceInfo>(() => {
-    if (typeof window === 'undefined') {
-      return {
-        isMobile: false,
-        isTablet: false,
-        isDesktop: true,
-        deviceType: 'desktop',
-        screenWidth: 1024,
-        breakpoint: 'lg',
-        hasTouchInput: false,
-        hasTouchOnlyPointer: false,
-      };
-    }
-    return getDeviceInfo();
-  });
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    let debounceTimer: ReturnType<typeof setTimeout>;
-    const handleResize = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        setDeviceInfo(getDeviceInfo());
-      }, 150);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      clearTimeout(debounceTimer);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return;
-    }
-
-    const pointerQuery = window.matchMedia('(pointer: coarse)');
-    const hoverQuery = window.matchMedia('(hover: none)');
-
-    const handlePointerChange = () => {
-      setDeviceInfo(getDeviceInfo());
-    };
-
-    const cleanups: Array<() => void> = [];
-
-    const attachListener = (query: MediaQueryList | null) => {
-      if (!query) {
-        return;
-      }
-      if (typeof query.addEventListener === 'function') {
-        query.addEventListener('change', handlePointerChange);
-        cleanups.push(() => query.removeEventListener('change', handlePointerChange));
-      } else if (typeof query.addListener === 'function') {
-        query.addListener(handlePointerChange);
-        cleanups.push(() => query.removeListener(handlePointerChange));
-      }
-    };
-
-    attachListener(pointerQuery);
-    attachListener(hoverQuery);
-
-    return () => {
-      cleanups.forEach((cleanup) => cleanup());
-    };
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const isDesktopShellRuntime = isDesktopShell();
-    const supportsMatchMedia = typeof window.matchMedia === 'function';
-    const pointerQuery = supportsMatchMedia ? window.matchMedia('(pointer: coarse)') : null;
-    const hoverQuery = supportsMatchMedia ? window.matchMedia('(hover: none)') : null;
-    const prefersCoarsePointer = pointerQuery?.matches ?? false;
-    const noHover = hoverQuery?.matches ?? false;
-    const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0;
-    const hasTouchInput = prefersCoarsePointer || noHover || maxTouchPoints > 0;
-    setRootDeviceAttributes(isDesktopShellRuntime, deviceInfo.deviceType, hasTouchInput);
-  }, [deviceInfo.deviceType, deviceInfo.hasTouchInput]);
-
-  return deviceInfo;
+  return React.useSyncExternalStore(subscribeDeviceInfo, getDeviceInfoSnapshot, () => DEFAULT_DEVICE_INFO);
 }

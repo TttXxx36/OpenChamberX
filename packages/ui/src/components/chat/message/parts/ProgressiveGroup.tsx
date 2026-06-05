@@ -44,6 +44,7 @@ interface ProgressiveGroupProps {
     animateRows?: boolean;
     animatedToolIds?: Set<string>;
     renderJustificationActions?: (activity: TurnActivityPart) => React.ReactNode;
+    sessionDirectory?: string | null;
 }
 
 const ExternalLinkFavicon: React.FC<{ href: string }> = React.memo(({ href }) => {
@@ -450,6 +451,7 @@ interface ExpandableToolRowProps {
     onContentChange?: (reason?: ContentChangeReason) => void;
     animateTailText: boolean;
     animateRows: boolean;
+    sessionDirectory?: string | null;
 }
 
 const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
@@ -462,6 +464,7 @@ const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
     onContentChange,
     animateTailText,
     animateRows,
+    sessionDirectory,
 }) => {
     const handleToggle = React.useCallback(() => {
         onToggleTool(activity.id);
@@ -477,6 +480,7 @@ const ExpandableToolRow: React.FC<ExpandableToolRowProps> = ({
             onContentChange={onContentChange}
             onShowPopup={onShowPopup}
             animateTailText={animateTailText}
+            sessionDirectory={sessionDirectory}
         />
     );
 
@@ -502,6 +506,7 @@ const MemoExpandableToolRow = React.memo(ExpandableToolRow, (prev, next) => {
         && prev.onContentChange === next.onContentChange
         && prev.animateTailText === next.animateTailText
         && prev.animateRows === next.animateRows
+        && prev.sessionDirectory === next.sessionDirectory
         && prev.activity.id === next.activity.id
         && prev.activity.kind === next.activity.kind
         && prev.activity.endedAt === next.activity.endedAt
@@ -513,6 +518,7 @@ interface StaticGroupedToolRowProps {
     activities: TurnActivityPart[];
     animateTailText: boolean;
     animateRows: boolean;
+    sessionDirectory?: string | null;
 }
 
 const StaticGroupedToolRow: React.FC<StaticGroupedToolRowProps> = ({
@@ -520,12 +526,14 @@ const StaticGroupedToolRow: React.FC<StaticGroupedToolRowProps> = ({
     activities,
     animateTailText,
     animateRows,
+    sessionDirectory,
 }) => {
     const content = (
         <StaticToolRow
             toolName={toolName}
             activities={activities}
             animateTailText={animateTailText}
+            sessionDirectory={sessionDirectory}
         />
     );
 
@@ -546,6 +554,7 @@ const MemoStaticGroupedToolRow = React.memo(StaticGroupedToolRow, (prev, next) =
     return prev.toolName === next.toolName
         && prev.animateTailText === next.animateTailText
         && prev.animateRows === next.animateRows
+        && prev.sessionDirectory === next.sessionDirectory
         && areActivityListsEqual(prev.activities, next.activities);
 });
 
@@ -642,13 +651,14 @@ const StaticToolRowInner: React.FC<{
     toolName: string;
     activities: TurnActivityPart[];
     animateTailText: boolean;
-}> = ({ toolName, activities, animateTailText }) => {
+    sessionDirectory?: string | null;
+}> = ({ toolName, activities, animateTailText, sessionDirectory }) => {
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
     const displayName = getToolMetadata(toolName).displayName;
     const icon = getToolIcon(toolName);
     const isReadGroup = toolName.toLowerCase() === 'read';
     const runtime = React.useContext(RuntimeAPIContext);
-    const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+    const currentDirectory = useDirectoryStore((state) => sessionDirectory?.trim() || state.currentDirectory);
     const skills = useSkillsStore((state) => state.skills);
     const hasRunningActivity = React.useMemo(() => activities.some((activity) => isActivityRunning(activity)), [activities]);
     const skillByName = React.useMemo(() => new Map(skills.map((skill) => [skill.name, skill])), [skills]);
@@ -839,6 +849,7 @@ const StaticToolRowInner: React.FC<{
 export const StaticToolRow = React.memo(StaticToolRowInner, (prev, next) => {
     return prev.toolName === next.toolName
         && prev.animateTailText === next.animateTailText
+        && prev.sessionDirectory === next.sessionDirectory
         && areActivityListsEqual(prev.activities, next.activities);
 });
 
@@ -894,6 +905,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     animateRows = true,
     animatedToolIds,
     renderJustificationActions,
+    sessionDirectory,
 }) => {
     const previewCount = showHeader && !isExpanded
         ? Math.max(0, Math.floor(collapsedPreviewCount))
@@ -979,6 +991,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                         onContentChange={onContentChange}
                         animateTailText={Boolean(animatedToolIds?.has(row.activity.id))}
                         animateRows={animateRows}
+                        sessionDirectory={sessionDirectory}
                     />
                 );
 
@@ -990,6 +1003,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                         activities={row.activities}
                         animateTailText={row.activities.some((activity) => animatedToolIds?.has(activity.id))}
                         animateRows={animateRows}
+                        sessionDirectory={sessionDirectory}
                     />
                 );
 
@@ -1006,6 +1020,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                         onContentChange={onContentChange}
                         animateTailText={Boolean(animatedToolIds?.has(row.activity.id))}
                         animateRows={animateRows}
+                        sessionDirectory={sessionDirectory}
                     />
                 );
 

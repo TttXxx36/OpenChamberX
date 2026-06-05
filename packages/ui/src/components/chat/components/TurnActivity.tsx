@@ -29,6 +29,7 @@ interface TurnActivityProps {
     animatedToolIds?: Set<string>;
     diffStats?: DiffStats;
     renderJustificationActions?: (activity: TurnActivityRecord) => React.ReactNode;
+    sessionDirectory?: string | null;
 }
 
 const TurnActivity: React.FC<TurnActivityProps> = (props) => {
