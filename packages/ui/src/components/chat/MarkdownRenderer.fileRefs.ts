@@ -74,6 +74,31 @@ export const resolveFileReferencePath = (baseDirectory: string, targetPath: stri
   return `/${joined}`;
 };
 
+export const resolveFileReferencePathCandidates = (baseDirectory: string, targetPath: string): string[] => {
+  const primary = resolveFileReferencePath(baseDirectory, targetPath);
+  if (!primary || isAbsoluteFileReferencePath(normalizeFileReferencePath(targetPath))) {
+    return primary ? [primary] : [];
+  }
+
+  const normalizedBase = normalizeFileReferencePath(baseDirectory);
+  const normalizedTarget = normalizeFileReferencePath(targetPath);
+  const isWindowsDriveBase = /^[A-Za-z]:/.test(normalizedBase);
+  const baseParts = (isWindowsDriveBase ? normalizedBase.slice(2) : normalizedBase).split('/').filter(Boolean);
+  const targetParts = normalizedTarget.split('/').filter(Boolean);
+  const baseName = baseParts[baseParts.length - 1] ?? '';
+  const firstTargetPart = targetParts[0] ?? '';
+  const matchesBaseName = isWindowsDriveBase
+    ? firstTargetPart.toLowerCase() === baseName.toLowerCase()
+    : firstTargetPart === baseName;
+
+  if (!baseName || !matchesBaseName || targetParts.length < 2) {
+    return [primary];
+  }
+
+  const fallback = resolveFileReferencePath(baseDirectory, targetParts.slice(1).join('/'));
+  return fallback && fallback !== primary ? [primary, fallback] : [primary];
+};
+
 export const getFileReferenceContextDirectory = (baseDirectory: string, resolvedPath: string): string => {
   const normalizedBase = normalizeFileReferencePath(baseDirectory);
   const normalizedPath = normalizeFileReferencePath(resolvedPath);

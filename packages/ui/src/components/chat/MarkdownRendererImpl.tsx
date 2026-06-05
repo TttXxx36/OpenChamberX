@@ -33,7 +33,7 @@ import {
   getFileReferenceCandidateFromAnchor,
   getFileReferenceBaseDirectory,
   getFileReferenceContextDirectory,
-  resolveFileReferencePath,
+  resolveFileReferencePathCandidates,
 } from './MarkdownRenderer.fileRefs';
 import { resolveMessageReferenceDirectory } from './message/messageDirectory';
 
@@ -1275,13 +1275,16 @@ const extractPathCandidateFromElement = (element: HTMLElement): string => {
   return (element.textContent || '').trim();
 };
 
-const getResolvedReference = (rawValue: string, baseDirectory: string): (ParsedFileReference & { resolvedPath: string }) | null => {
+type ResolvedFileReference = ParsedFileReference & { resolvedPath: string; candidatePaths: string[] };
+
+const getResolvedReference = (rawValue: string, baseDirectory: string): ResolvedFileReference | null => {
   const parsed = parseFileReference(rawValue);
   if (!parsed || !isLikelyFilePathValue(parsed.path)) {
     return null;
   }
 
-  const resolvedPath = resolveFileReferencePath(baseDirectory, parsed.path);
+  const candidatePaths = resolveFileReferencePathCandidates(baseDirectory, parsed.path);
+  const resolvedPath = candidatePaths[0] ?? '';
   if (!resolvedPath) {
     return null;
   }
@@ -1289,6 +1292,7 @@ const getResolvedReference = (rawValue: string, baseDirectory: string): (ParsedF
   return {
     ...parsed,
     resolvedPath,
+    candidatePaths,
   };
 };
 
@@ -1308,7 +1312,8 @@ const fileReferenceExists = (resolvedPath: string): Promise<boolean> => {
   const request = new Promise<boolean>((resolve) => {
     const run = () => {
       activeFileReferenceStatCount += 1;
-      void runtimeFetch(`/api/fs/stat?path=${encodeURIComponent(normalizedPath)}`, {
+      const params = new URLSearchParams({ path: normalizedPath });
+      void runtimeFetch(`/api/fs/stat?${params.toString()}`, {
         method: 'GET',
         cache: 'no-store',
       })
@@ -1342,6 +1347,15 @@ const fileReferenceExists = (resolvedPath: string): Promise<boolean> => {
 
 const getContextDirectory = (effectiveDirectory: string, resolvedPath: string): string => {
   return getFileReferenceContextDirectory(effectiveDirectory, resolvedPath);
+};
+
+const selectExistingFileReference = async (reference: ResolvedFileReference): Promise<ResolvedFileReference | null> => {
+  for (const candidatePath of reference.candidatePaths) {
+    if (await fileReferenceExists(candidatePath)) {
+      return { ...reference, resolvedPath: candidatePath };
+    }
+  }
+  return null;
 };
 
 const useFileReferenceInteractions = ({
@@ -1417,20 +1431,20 @@ const useFileReferenceInteractions = ({
 
         linkedCount += 1;
 
-        void fileReferenceExists(resolved.resolvedPath).then((exists) => {
-          if (cancelled || !exists || !container.contains(candidate)) {
+        void selectExistingFileReference(resolved).then((existingReference) => {
+          if (cancelled || !existingReference || !container.contains(candidate)) {
             return;
           }
 
           const latestRawCandidate = extractPathCandidateFromElement(candidate);
           const latestResolved = getResolvedReference(latestRawCandidate, baseDirectory);
-          if (!latestResolved || latestResolved.resolvedPath !== resolved.resolvedPath) {
+          if (!latestResolved || !latestResolved.candidatePaths.includes(existingReference.resolvedPath)) {
             return;
           }
 
           candidate.setAttribute('data-openchamber-file-link', 'true');
           candidate.setAttribute('data-openchamber-file-ref', latestRawCandidate);
-          candidate.setAttribute('data-openchamber-file-path', latestResolved.resolvedPath);
+          candidate.setAttribute('data-openchamber-file-path', existingReference.resolvedPath);
           candidate.setAttribute('title', fileLinkTitle);
           if (candidate.tagName.toLowerCase() !== 'a') {
             candidate.setAttribute('role', 'button');
@@ -1440,12 +1454,20 @@ const useFileReferenceInteractions = ({
       }
     };
 
-    const openFileReference = (sourceElement: HTMLElement, rawOverride?: string) => {
+    const openFileReference = (sourceElement: HTMLElement, rawOverride?: string, resolvedPathOverride?: string) => {
       const baseDirectory = getFileReferenceBaseDirectory({ referenceDirectory, effectiveDirectory });
       const raw = rawOverride || sourceElement.getAttribute('data-openchamber-file-ref') || extractPathCandidateFromElement(sourceElement);
       const resolved = getResolvedReference(raw, baseDirectory);
       if (!resolved) {
         return;
+      }
+      if (resolvedPathOverride) {
+        resolved.resolvedPath = resolvedPathOverride;
+      } else if (!rawOverride) {
+        const annotatedPath = sourceElement.getAttribute('data-openchamber-file-path');
+        if (annotatedPath && resolved.candidatePaths.includes(annotatedPath)) {
+          resolved.resolvedPath = annotatedPath;
+        }
       }
 
       const contextDirectory = getContextDirectory(baseDirectory, resolved.resolvedPath);
@@ -1508,11 +1530,11 @@ const useFileReferenceInteractions = ({
       event.preventDefault();
       event.stopPropagation();
 
-      void fileReferenceExists(resolvedCandidate.resolvedPath).then((exists) => {
-        if (!exists || !container.contains(anchor)) {
+      void selectExistingFileReference(resolvedCandidate).then((existingReference) => {
+        if (!existingReference || !container.contains(anchor)) {
           return;
         }
-        openFileReference(anchor, rawCandidate);
+        openFileReference(anchor, rawCandidate, existingReference.resolvedPath);
       });
     };
 

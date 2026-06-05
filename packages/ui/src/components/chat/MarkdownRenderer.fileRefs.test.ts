@@ -4,6 +4,7 @@ import {
   getFileReferenceCandidateFromAnchor,
   getFileReferenceBaseDirectory,
   getFileReferenceContextDirectory,
+  resolveFileReferencePathCandidates,
   resolveFileReferencePath,
 } from './MarkdownRenderer.fileRefs';
 
@@ -33,6 +34,27 @@ describe('markdown file reference path resolution', () => {
   test('normalizes dot segments in relative references', () => {
     expect(resolveFileReferencePath('/repo/OpenChamberX/packages/ui', '../web/src/main.tsx'))
       .toBe('/repo/OpenChamberX/packages/web/src/main.tsx');
+  });
+
+  test('offers a repo-basename fallback without changing primary relative resolution', () => {
+    expect(resolveFileReferencePath('D:/Documents/Opencode/OpenChamberX', 'OpenChamberX/packages/ui/src/components/chat/ChatMessage.tsx'))
+      .toBe('D:/Documents/Opencode/OpenChamberX/OpenChamberX/packages/ui/src/components/chat/ChatMessage.tsx');
+
+    expect(resolveFileReferencePathCandidates('D:/Documents/Opencode/OpenChamberX', 'OpenChamberX/packages/ui/src/components/chat/ChatMessage.tsx'))
+      .toEqual([
+        'D:/Documents/Opencode/OpenChamberX/OpenChamberX/packages/ui/src/components/chat/ChatMessage.tsx',
+        'D:/Documents/Opencode/OpenChamberX/packages/ui/src/components/chat/ChatMessage.tsx',
+      ]);
+  });
+
+  test('does not offer case-insensitive repo-basename fallbacks for Unix paths', () => {
+    expect(resolveFileReferencePathCandidates('/repo/OpenChamberX', 'openchamberx/src/index.ts'))
+      .toEqual(['/repo/OpenChamberX/openchamberx/src/index.ts']);
+  });
+
+  test('keeps legitimate nested same-name folders as the primary candidate', () => {
+    expect(resolveFileReferencePathCandidates('/repo/OpenChamberX', 'OpenChamberX/src/index.ts')[0])
+      .toBe('/repo/OpenChamberX/OpenChamberX/src/index.ts');
   });
 
   test('uses file parent as context when an absolute path is outside the base directory', () => {
