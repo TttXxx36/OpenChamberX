@@ -588,6 +588,7 @@ export interface ListDirectoryOptions {
 
 export interface FileReadOptions {
   allowOutsideWorkspace?: boolean;
+  directory?: string;
   optional?: boolean;
 }
 

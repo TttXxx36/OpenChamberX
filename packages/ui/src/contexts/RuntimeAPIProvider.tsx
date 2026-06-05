@@ -13,18 +13,28 @@ import {
 function withContentCache(files: FilesAPI): FilesAPI {
   const cache = new Map<string, { content: string; path: string; size?: number; mtimeMs?: number }>();
 
-  const removeCacheEntry = (path: string) => {
-    cache.delete(path);
-    removeContentBytes(path);
+  const removeCacheEntry = (cacheKey: string) => {
+    cache.delete(cacheKey);
+    removeContentBytes(cacheKey);
+  };
+
+  const cacheKeyPath = (cacheKey: string) => {
+    const separatorIndex = cacheKey.indexOf('\0');
+    return separatorIndex === -1 ? cacheKey : cacheKey.slice(separatorIndex + 1);
   };
 
   const removeCacheEntriesByPrefix = (path: string) => {
     const prefix = path.endsWith('/') ? path : `${path}/`;
     for (const key of cache.keys()) {
-      if (key === path || key.startsWith(prefix)) {
+      const entryPath = cacheKeyPath(key);
+      if (entryPath === path || entryPath.startsWith(prefix)) {
         removeCacheEntry(key);
       }
     }
+  };
+
+  const getCacheKey = (path: string, options?: Parameters<NonNullable<FilesAPI['readFile']>>[1]) => {
+    return options?.directory ? `${options.directory}\0${path}` : path;
   };
 
   /** Whether cached metadata still matches the file on disk. */
@@ -41,17 +51,17 @@ function withContentCache(files: FilesAPI): FilesAPI {
   };
 
   const syncCacheEntry = (
-    path: string,
+    cacheKey: string,
     result: { content: string; path: string },
     stat?: { isFile: boolean; size: number; mtimeMs?: number } | null,
   ): { content: string; path: string } => {
     const bytes = approxStringBytes(result.content);
-    cache.set(path, {
+    cache.set(cacheKey, {
       ...result,
       size: stat?.isFile ? stat.size : undefined,
       mtimeMs: stat?.isFile ? stat.mtimeMs : undefined,
     });
-    setContentBytes(path, bytes);
+    setContentBytes(cacheKey, bytes);
 
     const keep = new Set<string>();
     evictContentLru(keep, (evictPath) => {
@@ -64,6 +74,7 @@ function withContentCache(files: FilesAPI): FilesAPI {
   const readFreshFile = async (path: string, options?: Parameters<NonNullable<FilesAPI['readFile']>>[1]): Promise<{ content: string; path: string }> => {
     // stat → read → stat to avoid TOCTOU:
     // if the file changes between read and either stat, metadata won't match and we retry.
+    const cacheKey = getCacheKey(path, options);
     const statBefore = await files.statFile?.(path, options).catch(() => null);
 
     const result = await files.readFile!(path, options);
@@ -73,7 +84,7 @@ function withContentCache(files: FilesAPI): FilesAPI {
     // If both stats are available and agree, the read was atomic with respect to file changes.
     if (statBefore && statAfter && statBefore.isFile && statAfter.isFile) {
       if (statBefore.size === statAfter.size && statBefore.mtimeMs === statAfter.mtimeMs) {
-        return syncCacheEntry(path, result, statAfter);
+        return syncCacheEntry(cacheKey, result, statAfter);
       }
       // File changed during read — discard and re-read once.
       const retryStatBefore = await files.statFile?.(path, options).catch(() => null);
@@ -82,13 +93,13 @@ function withContentCache(files: FilesAPI): FilesAPI {
       // Accept retry only if file was stable across the read.
       if (retryStatBefore && retryStat && retryStatBefore.isFile && retryStat.isFile
         && retryStatBefore.size === retryStat.size && retryStatBefore.mtimeMs === retryStat.mtimeMs) {
-        return syncCacheEntry(path, retry, retryStat);
+        return syncCacheEntry(cacheKey, retry, retryStat);
       }
       // Best-effort: file was still changing, cache what we got. Next hit will re-validate.
-      return syncCacheEntry(path, retry, retryStat);
+      return syncCacheEntry(cacheKey, retry, retryStat);
     }
 
-    return syncCacheEntry(path, result, statAfter ?? statBefore);
+    return syncCacheEntry(cacheKey, result, statAfter ?? statBefore);
   };
 
   const cachedReadFile: FilesAPI['readFile'] = files.readFile
@@ -96,31 +107,32 @@ function withContentCache(files: FilesAPI): FilesAPI {
         if (options?.allowOutsideWorkspace) {
           return readFreshFile(path, options);
         }
-        const hit = cache.get(path);
+        const cacheKey = getCacheKey(path, options);
+        const hit = cache.get(cacheKey);
         if (hit) {
           // Validate cached entry is still fresh
           if (files.statFile) {
-            const latest = await files.statFile(path).catch(() => {
-              removeCacheEntry(path);
+            const latest = await files.statFile(path, options).catch(() => {
+              removeCacheEntry(cacheKey);
               return null;
             });
             if (!latest || !statMatches(hit, latest)) {
-              removeCacheEntry(path);
-              return readFreshFile(path);
+              removeCacheEntry(cacheKey);
+              return readFreshFile(path, options);
             }
           }
-          touchContentLru(path);
+          touchContentLru(cacheKey);
           return { content: hit.content, path: hit.path };
         }
 
-        return readFreshFile(path);
+        return readFreshFile(path, options);
       }
     : undefined;
 
   // Invalidate cache on writes, deletes, renames
   const cachedWriteFile: FilesAPI['writeFile'] = files.writeFile
     ? async (path, content) => {
-        removeCacheEntry(path);
+        removeCacheEntriesByPrefix(path);
         return files.writeFile!(path, content);
       }
     : undefined;

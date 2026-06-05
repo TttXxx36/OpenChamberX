@@ -122,6 +122,9 @@ export const createWebFilesAPI = ({ urls }: WebFilesAPIOptions): FilesAPI => ({
   async statFile(path: string, options): Promise<{ path: string; isFile: boolean; size: number; mtimeMs?: number }> {
     const target = normalizePath(path);
     const params = new URLSearchParams({ path: target });
+    if (options?.directory) {
+      params.set('directory', normalizePath(options.directory));
+    }
     if (options?.allowOutsideWorkspace) {
       params.set('allowOutsideWorkspace', 'true');
     }
@@ -144,6 +147,9 @@ export const createWebFilesAPI = ({ urls }: WebFilesAPIOptions): FilesAPI => ({
   async readFile(path: string, options): Promise<{ content: string; path: string }> {
     const target = normalizePath(path);
     const params = new URLSearchParams({ path: target });
+    if (options?.directory) {
+      params.set('directory', normalizePath(options.directory));
+    }
     if (options?.allowOutsideWorkspace) {
       params.set('allowOutsideWorkspace', 'true');
     }

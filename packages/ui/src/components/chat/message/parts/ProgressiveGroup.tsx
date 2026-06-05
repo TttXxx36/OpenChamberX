@@ -19,6 +19,7 @@ import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
+import { selectToolFilePathForOpen } from './ProgressiveGroup.path';
 import ReasoningPart from './ReasoningPart';
 import JustificationBlock from './JustificationBlock';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
@@ -329,21 +330,6 @@ const renderReadFilePath = (displayPath: string, animate = true) => {
             </Text>
         </span>
     );
-};
-
-const resolveAbsolutePath = (currentDirectory: string, filePath: string): string => {
-    const normalizedPath = normalizePathValue(filePath);
-    if (!normalizedPath) {
-        return '';
-    }
-    if (normalizedPath.startsWith('/')) {
-        return normalizedPath;
-    }
-    const normalizedDirectory = normalizePathValue(currentDirectory);
-    if (!normalizedDirectory) {
-        return normalizedPath;
-    }
-    return normalizedDirectory.endsWith('/') ? `${normalizedDirectory}${normalizedPath}` : `${normalizedDirectory}/${normalizedPath}`;
 };
 
 const resolveSkillFilePath = (skillPathOrDir: string): string => {
@@ -709,23 +695,24 @@ const StaticToolRowInner: React.FC<{
     }, [activities, currentDirectory, isReadGroup]);
 
     const handleReadFileClick = React.useCallback((filePath: string, offset?: number) => {
-        const absolutePath = resolveAbsolutePath(currentDirectory, filePath);
-        if (!absolutePath) {
-            return;
-        }
+        void selectToolFilePathForOpen(currentDirectory, filePath, runtime?.files.statFile).then((absolutePath) => {
+            if (!absolutePath) {
+                return;
+            }
 
-        if (runtime?.editor) {
-            void runtime.editor.openFile(absolutePath, offset);
-            return;
-        }
+            if (runtime?.editor) {
+                void runtime.editor.openFile(absolutePath, offset);
+                return;
+            }
 
-        const uiStore = useUIStore.getState();
-        const contextDirectory = getContextDirectoryForPath(currentDirectory, absolutePath);
-        if (offset && Number.isFinite(offset)) {
-            uiStore.openContextFileAtLine(contextDirectory, absolutePath, Math.max(1, Math.trunc(offset)), 1);
-            return;
-        }
-        uiStore.openContextFile(contextDirectory, absolutePath);
+            const uiStore = useUIStore.getState();
+            const contextDirectory = getContextDirectoryForPath(currentDirectory, absolutePath);
+            if (offset && Number.isFinite(offset)) {
+                uiStore.openContextFileAtLine(contextDirectory, absolutePath, Math.max(1, Math.trunc(offset)), 1);
+                return;
+            }
+            uiStore.openContextFile(contextDirectory, absolutePath);
+        });
     }, [currentDirectory, runtime]);
 
     const handleSkillClick = React.useCallback((skillPath: string) => {

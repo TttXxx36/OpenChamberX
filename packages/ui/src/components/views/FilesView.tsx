@@ -758,8 +758,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
   const selectedFilePath = selectedFile?.path ?? '';
   const selectedFileIsOutsideWorkspace = Boolean(root && selectedFilePath && !isPathWithinRoot(selectedFilePath, root));
   const selectedFileReadOptions = React.useMemo(
-    () => ({ allowOutsideWorkspace: mode === 'editor-only' && selectedFileIsOutsideWorkspace }),
-    [mode, selectedFileIsOutsideWorkspace],
+    () => ({
+      allowOutsideWorkspace: mode === 'editor-only' && selectedFileIsOutsideWorkspace,
+      directory: root || undefined,
+    }),
+    [mode, root, selectedFileIsOutsideWorkspace],
   );
 
   // Editor tabs horizontal scroll fades
@@ -1417,13 +1420,16 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
     };
   }, [currentDirectory, debouncedSearchQuery, searchFiles, showHidden, showGitignored]);
 
-  const readFile = React.useCallback(async (path: string, options?: { allowOutsideWorkspace?: boolean; optional?: boolean }): Promise<string> => {
+  const readFile = React.useCallback(async (path: string, options?: { allowOutsideWorkspace?: boolean; directory?: string; optional?: boolean }): Promise<string> => {
     if (files.readFile) {
       const result = await files.readFile(path, options);
       return result.content ?? '';
     }
 
     const params = new URLSearchParams({ path });
+    if (options?.directory) {
+      params.set('directory', options.directory);
+    }
     if (options?.allowOutsideWorkspace) {
       params.set('allowOutsideWorkspace', 'true');
     }
@@ -1671,7 +1677,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
 
     setFileLoading(true);
 
-    const readOptions = { allowOutsideWorkspace: mode === 'editor-only' && Boolean(root) && !isPathWithinRoot(node.path, root) };
+    const readOptions = selectedFileReadOptions;
 
     await readFile(node.path, readOptions)
       .then((content) => {
@@ -1751,7 +1757,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
           setFileLoading(false);
         }
       });
-  }, [expandPaths, isMobile, loadDirectory, mode, normalizedTargetPath, readFile, readFileStat, removeOpenPathsByPrefix, root, runtime.isDesktop, searchQuery, setSelectedPath, t]);
+  }, [expandPaths, isMobile, loadDirectory, normalizedTargetPath, readFile, readFileStat, removeOpenPathsByPrefix, root, runtime.isDesktop, searchQuery, selectedFileReadOptions, setSelectedPath, t]);
 
   const showFileErrorRetry = shouldShowFilesViewRetry({
     fileError,
@@ -2610,6 +2616,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', targetPath 
         ? `data:${getImageMimeType(selectedFile.path)};utf8,${encodeURIComponent(fileContent)}`
         : imageAssetAuthReadyKey === imageAssetAuthKey ? getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', {
           path: selectedFile.path,
+          directory: selectedFileReadOptions.directory,
           allowOutsideWorkspace: selectedFileReadOptions.allowOutsideWorkspace ? 'true' : undefined,
         }) : ''))
     : '';
